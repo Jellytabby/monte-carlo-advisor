@@ -6,6 +6,7 @@ from subprocess import CompletedProcess
 
 parser = argparse.ArgumentParser(
     description='Take a C++ file and return LLVM IR')
+parser.add_argument('-S', action='store_true', help="Only generate llvm IR" )
 parser.add_argument('cpp_file', type=str, help='Path to the C++ file')
 parser.add_argument('--flags', nargs=argparse.REMAINDER,
                     default=[], help='Flags to pass to the clang compiler')
@@ -45,18 +46,7 @@ def optimize_llvm_ir(llvm_input: CompletedProcess[bytes]) -> CompletedProcess[by
 
 
 def compile_llvm_ir(filename: str, input_pipe: CompletedProcess[bytes]):
-    llc_cmd = ['llc', '-filetype=obj', '-', '-o', '-']
     clang_cmd = ['clang', '-x', 'ir', '-', '-o', f"{filename}.out"]
-
-    # try:
-    #     p1 = subprocess.run(llc_cmd, input=input_pipe.stdout, stdout=subprocess.PIPE,
-    #                         stderr=subprocess.PIPE)
-    #
-    # except subprocess.CalledProcessError as e:
-    #     print(f"Assembly from LLVM IR failed with error code: {e.returncode}\n"
-    #           f"Output: {e.stderr}")
-    #     exit(e.returncode)
-
     try:
         p2 = subprocess.run(clang_cmd, input=input_pipe.stdout,
                             stderr=subprocess.PIPE, check=True)
@@ -76,6 +66,10 @@ def measure_execution_time(path_to_binary: str) -> float:
 if __name__ == "__main__":
     filename = os.path.basename(args.cpp_file)[:-4]
     clang_stdout = get_ir_from_clang(args.cpp_file)
+    if args.S:
+        with open(f"{filename}.ll", 'w') as open_file:
+            open_file.write(clang_stdout.stdout.decode())
+        exit(0)
     opt_stdout = optimize_llvm_ir(clang_stdout)
     compile_llvm_ir(filename, opt_stdout)
     execution_time = measure_execution_time(f"{filename}.out")
