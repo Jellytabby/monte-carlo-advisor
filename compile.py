@@ -2,7 +2,7 @@ import argparse
 import time
 import os
 import subprocess
-from subprocess import CompletedProcess
+from pathlib import Path
 
 parser = argparse.ArgumentParser(
     description='Take a C++ file and return LLVM IR')
@@ -13,7 +13,10 @@ parser.add_argument('--flags', nargs=argparse.REMAINDER,
 
 args = parser.parse_args()
 
-def get_output(
+def basename(file:str) -> str:
+    return Path(file).stem
+
+def get_cmd_output(
         cmd,
         stdin=None,
         timeout=None
@@ -66,30 +69,39 @@ def get_output(
             #     raise ExecFailTy(cmd, outs.decode("utf-8"), errs_decoded)
             #
             # logger.debug("Finished.")
-            except subprocess.CalledProcessError as e:
-                print(f"Compilation failed with error code {e.returncode}:")
-                print(e.stderr)
-                exit(e.returncode)
+            # except subprocess.CalledProcessError as e:
+            #     print(f"Compilation failed with error code {e.returncode}:")
+            #     print(e.stderr)
+            #     exit(e.returncode)
+            except subprocess.TimeoutExpired as e:
+                print(f"Some error {e}")
+                exit(-1)
                 
-            return outs, errs
+            if status != 0:
+                print(f"Failed to execute {' '.join(cmd)}")
+                print(f"Error: {errs.decode()}")
+                exit(status)
+
+            return outs
 
 
 def get_ir_from_clang(file_path: str) -> bytes:
     clang_cmd = ['clang++',  '-cc1', '-O1', '-disable-llvm-passes',
                  '-emit-llvm'] + args.flags + [file_path, '-o', '-']
-    clang_result, errs = get_output(clang_cmd)
+    clang_result = get_cmd_output(clang_cmd)
     return clang_result
 
 
 def optimize_llvm_ir(llvm_input: bytes, opt_flags: list[str]) -> bytes:
     opt_cmd = ['opt', '-S'] + opt_flags + ['-', '-o', '-']
-    opt_result, errs = get_output(opt_cmd, llvm_input)
+    opt_result = get_cmd_output(opt_cmd, llvm_input)
     return opt_result
 
 
 def compile_llvm_ir(filename: str, input_pipe: bytes):
     compile_cmd = ['clang++', '-x', 'ir', '-', '-o', f"{filename}.out"]
-    get_output(compile_cmd, input_pipe)
+    get_cmd_output(compile_cmd, input_pipe)
+
     
 
 
@@ -101,7 +113,7 @@ def measure_execution_time(path_to_binary: str) -> float:
 
 
 if __name__ == "__main__":
-    filename = os.path.basename(args.cpp_file)[:-4]
+    filename = basename(args.cpp_file)
     clang_stdout = get_ir_from_clang(args.cpp_file)
     if args.S:
         with open(f"{filename}.ll", 'w') as open_file:

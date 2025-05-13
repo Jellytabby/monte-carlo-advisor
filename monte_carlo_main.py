@@ -20,8 +20,20 @@ parser.add_argument('input_file', type=str, help="Path to input file")
 
 args = parser.parse_args()
 
+def get_baseline(path_to_file: str) -> float:
+    filename = compile.basename(path_to_file)
+    cmd = ['clang++', '-O3', path_to_file, '-o',f"{filename}.out" ]
+    compile.get_cmd_output(cmd)
+    return compile.measure_execution_time(f"{filename}.out")
+
+
+
 if __name__ == "__main__":
-    filename = os.path.basename(args.input_file)[:-4]
+    baseline = get_baseline(args.input_file)
+    print(f"Baseline: {baseline}")
+
+    filename = compile.basename(args.input_file)
+    print(f"Filename: {filename}")
     mc_advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
     
     clang_out = compile.get_ir_from_clang(args.input_file)
@@ -47,12 +59,4 @@ if __name__ == "__main__":
     execution_time = compile.measure_execution_time(f"{filename}.out")
     print(f"Binary took {execution_time}s to run.")
 
-
-
-    # compile.compile_llvm_ir(f"{filename}.out", sys.stdin.read())
-
-    # os.chmod(f"bin_{filename}.out",stat.S_IRWXU)
-    # execution_time = compile.measure_execution_time(f"bin_{filename}.out")
-    # print(f"Binary took {execution_time}s to run.")
-
-    
+    print("Baseline wins") if baseline < execution_time else print("Monte Carlo wins")
