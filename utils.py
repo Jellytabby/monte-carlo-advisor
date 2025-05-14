@@ -1,17 +1,16 @@
 import argparse
-import time
-import os
+import re
 import subprocess
 from pathlib import Path
 
-parser = argparse.ArgumentParser(
-    description='Take a C++ file and return LLVM IR')
-parser.add_argument('-S', action='store_true', help="Only generate llvm IR" )
-parser.add_argument('cpp_file', type=str, help='Path to the C++ file')
-parser.add_argument('--flags', nargs=argparse.REMAINDER,
-                    default=[], help='Flags to pass to the clang compiler')
-
-args = parser.parse_args()
+# parser = argparse.ArgumentParser(
+#     description='Take a C++ file and return LLVM IR')
+# parser.add_argument('-S', action='store_true', help="Only generate llvm IR" )
+# parser.add_argument('cpp_file', type=str, help='Path to the C++ file')
+# parser.add_argument('--flags', nargs=argparse.REMAINDER,
+#                     default=[], help='Flags to pass to the clang compiler')
+#
+# args = parser.parse_args()
 
 def basename(file:str) -> str:
     return Path(file).stem
@@ -86,8 +85,8 @@ def get_cmd_output(
 
 
 def get_ir_from_clang(file_path: str) -> bytes:
-    clang_cmd = ['clang++',  '-cc1', '-O1', '-disable-llvm-passes',
-                 '-emit-llvm'] + args.flags + [file_path, '-o', '-']
+    clang_cmd = ['clang++', '-O3', '-Xclang', '-disable-llvm-passes',
+                 '-emit-llvm', '-S'] + args.flags + [file_path, '-o', '-']
     clang_result = get_cmd_output(clang_cmd)
     return clang_result
 
@@ -99,17 +98,19 @@ def optimize_llvm_ir(llvm_input: bytes, opt_flags: list[str]) -> bytes:
 
 
 def compile_llvm_ir(filename: str, input_pipe: bytes):
-    compile_cmd = ['clang++', '-x', 'ir', '-', '-o', f"{filename}.out"]
+    compile_cmd = ['clang++','-O0' , '-x', 'ir', '-', '-o', f"{filename}.out"]
     get_cmd_output(compile_cmd, input_pipe)
 
     
 
 
-def measure_execution_time(path_to_binary: str) -> float:
-    start_time = time.perf_counter()
-    subprocess.run(f"./{path_to_binary}")
-    end_time = time.perf_counter()
-    return end_time - start_time
+def readout_mc_inline_timer(input:str) -> int|None:
+    re_match = re.search("MC_INLINE_TIMER ([0-9]+)", input)
+    if re_match is None:
+        return None
+    else:
+        f = int(re_match.group(1))
+        return f
 
 
 if __name__ == "__main__":
@@ -121,5 +122,3 @@ if __name__ == "__main__":
         exit(0)
     opt_stdout = optimize_llvm_ir(clang_stdout, [])
     compile_llvm_ir(filename, opt_stdout)
-    execution_time = measure_execution_time(f"{filename}.out")
-    print(f"The binary took {execution_time}s to run.")
