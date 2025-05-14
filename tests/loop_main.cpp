@@ -6,7 +6,7 @@ extern "C" void __mc_inline_begin(void);
 extern "C" void __mc_inline_end(void);
 
 int main() {
-  int length = 1000;
+  int length = 500;
   int *a = new int[length];
   int *b = new int[length];
   int *c = new int[length](); // zero‐initialize c[]
@@ -19,7 +19,6 @@ int main() {
   }
 
   __mc_inline_begin();
-  // now the work is done in the other file:
   run_triplet_loop(length, a, b, c);
   __mc_inline_end();
 
@@ -29,4 +28,4 @@ int main() {
   delete[] b;
   delete[] c;
   return 0;
-}
+}  
