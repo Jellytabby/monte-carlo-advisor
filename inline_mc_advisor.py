@@ -13,11 +13,30 @@ class State:
         self.true_child:State|None = true_child
         self.false_child:State|None = false_child
         self.parent:State|None = parent
-    
+
     def __repr__(self) -> str:
-        return (f"Decisions: {self.decisions}\n"
-                f"Score: {self.score}\n"
-            f"Visits: {self.visits}\n")
+        return (f"State(decisions={self.decisions!r}, "
+                f"score={self.score:.2f}," 
+                f"visits={self.visits},")
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, State):
+            return NotImplemented
+        return self.score == other.score
+
+    def __lt__(self, other) -> bool:
+        if not isinstance(other, State):
+            return NotImplemented
+        return self.score < other.score
+
+    def add_child(self, choice:bool):
+        child = State(self.decisions[:] + [choice])
+        if choice:
+            self.true_child = child
+        else:
+            self.false_child = child
+        child.parent = self
+        return child
 
     def is_leaf(self) -> bool:
         return not self.true_child and not self.false_child
@@ -27,6 +46,8 @@ class InlineMonteCarloAdvisor(object):
         self.root:State = State()
         self.current:State = self.root
         self.C:float = C # exploration factor for UCT
+        self.best_state:State
+
 
     def advice_false(self, _) -> bool:
         return False
@@ -34,7 +55,7 @@ class InlineMonteCarloAdvisor(object):
         return True
 
     def advice(self, _) -> bool:
-        if self.current.is_leaf():
+        if self.current.visits == 0:
             return self.get_rollout_decision()
         else:
             next = self.get_next_state(self.current) 
@@ -47,21 +68,13 @@ class InlineMonteCarloAdvisor(object):
         match children:
             case (None, None):
                 if self.get_rollout_decision():
-                    false_child = State(state.decisions[:] + [False])
-                    state.false_child = false_child
-                    return false_child
+                    return state.add_child(False)
                 else:
-                    true_child = State(state.decisions[:] + [True])
-                    state.true_child = true_child
-                    return true_child
+                    return state.add_child(True)
             case (_, None):
-                false_child = State(state.decisions[:] + [False])
-                state.false_child = false_child
-                return false_child
+                return state.add_child(False)
             case (None, _):
-                true_child = State(state.decisions[:] + [True])
-                state.true_child = true_child
-                return true_child
+                return state.add_child(True)
             case (true_child, false_child):
                 return true_child if self.uct(true_child) > self.uct(false_child) else false_child
 
@@ -97,11 +110,51 @@ class InlineMonteCarloAdvisor(object):
     def update_score(self, score:float):
         self.current.score = (self.current.score-score)/self.current.visits
 
+
     def run_monte_carlo(self, nr_of_turns:int, input_mod, scoring_function):
         for _ in range(nr_of_turns):
+            repr_subtree(self.root)
             self.current = self.root
             score = self.get_score(input_mod, scoring_function)
             while self.current:
                 self.current.visits+=1
                 self.update_score(score)
                 self.current = self.current.parent
+
+
+def repr_subtree( root: State):
+        """
+        Print the subtree rooted at `root` in an ASCII-tree layout.
+        """
+        def _walk(node, prefix: str, label: str|None, is_last: bool):
+            # pick branch symbols
+            connector = "└── " if is_last else "├── "
+            label_str = f"[{label}] " if label else ""
+            print(prefix + connector + label_str + repr(node))
+
+            # prepare prefix for children
+            new_prefix = prefix + ("    " if is_last else "│   ")
+
+            # gather existing children in order
+            children = []
+            if node.true_child:
+                children.append(("True",  node.true_child))
+            if node.false_child:
+                children.append(("False", node.false_child))
+
+            # recurse
+            for idx, (lbl, child) in enumerate(children):
+                _walk(child, new_prefix, lbl, idx == len(children) - 1)
+        # print the root node itself (no connector or label)
+        print(repr(root))
+
+        # then its immediate children
+        root_children = []
+        if root.true_child:
+            root_children.append(("True",  root.true_child))
+        if root.false_child:
+            root_children.append(("False", root.false_child))
+
+        for idx, (lbl, child) in enumerate(root_children):
+            _walk(child, "", lbl, idx == len(root_children) - 1)
+

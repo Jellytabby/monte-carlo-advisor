@@ -6,7 +6,7 @@ extern "C" void __mc_inline_begin(void);
 extern "C" void __mc_inline_end(void);
 
 int main() {
-  int length = 500;
+  int length = 200;
   int *a = new int[length];
   int *b = new int[length];
   int *c = new int[length](); // zero‐initialize c[]
@@ -28,4 +28,4 @@ int main() {
   delete[] b;
   delete[] c;
   return 0;
-}  
+}

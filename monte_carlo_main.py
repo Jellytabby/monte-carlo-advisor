@@ -39,5 +39,5 @@ def get_score(mod: bytes):
 if __name__ == "__main__":
     m = get_input_module()
     advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
-    advisor.run_monte_carlo(10, m, get_score)
+    advisor.run_monte_carlo(50, m, get_score)
     # optimized_m = inline_mc_advisor.optimize_module(m, get_score)
