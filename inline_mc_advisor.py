@@ -1,9 +1,10 @@
+import logging
 import random
 from math import sqrt, log
 import tempfile
-from sys import argv
 import interactive_host
 
+logger = logging.getLogger(__name__)
 
 class State:
     def __init__(self, decisions=[], score=0.0, visits=0, true_child=None, false_child=None, parent=None):
@@ -18,6 +19,48 @@ class State:
         return (f"State(decisions={self.decisions!r}, "
                 f"score={self.score:.2f}," 
                 f"visits={self.visits},")
+
+    def repr_subtree(self):
+        """
+        Print the subtree rooted at `root` in an ASCII-tree layout.
+        """
+        lines: list[str] = ['\n']
+
+        def _walk(node, prefix: str, label: str|None, is_last: bool):
+            # pick branch symbols
+            connector = "└── " if is_last else "├── "
+            label_str = f"[{label}] " if label else ""
+            lines.append(prefix + connector + label_str + repr(node))
+
+            # prepare prefix for children
+            new_prefix = prefix + ("      " if is_last else "│     ")
+
+            # gather existing children in order
+            children = []
+            if node.true_child:
+                children.append(("True",  node.true_child))
+            if node.false_child:
+                children.append(("False", node.false_child))
+
+            # recurse
+            for idx, (lbl, child) in enumerate(children):
+                _walk(child, new_prefix, lbl, idx == len(children) - 1)
+
+        # print the root node itself (no connector or label)
+        lines.append(repr(self))
+
+        # then its immediate children
+        root_children = []
+        if self.true_child:
+            root_children.append(("True",  self.true_child))
+        if self.false_child:
+            root_children.append(("False", self.false_child))
+
+        for idx, (lbl, child) in enumerate(root_children):
+            _walk(child, "", lbl, idx == len(root_children) - 1)
+            
+        return "\n".join(lines)
+
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, State):
@@ -44,10 +87,12 @@ class State:
 class InlineMonteCarloAdvisor(object):
     def __init__(self, C=sqrt(2)):
         self.root:State = State()
-        self.current:State = self.root
+        self.current:State|None = self.root
         self.C:float = C # exploration factor for UCT
         self.best_state:State
 
+    def __repr__(self):
+        return self.root.repr_subtree()
 
     def advice_false(self, _) -> bool:
         return False
@@ -55,6 +100,7 @@ class InlineMonteCarloAdvisor(object):
         return True
 
     def advice(self, _) -> bool:
+        assert self.current
         if self.current.visits == 0:
             return self.get_rollout_decision()
         else:
@@ -108,53 +154,18 @@ class InlineMonteCarloAdvisor(object):
             return scoring_function(optimized_mod)
 
     def update_score(self, score:float):
+        assert self.current
         self.current.score = (self.current.score-score)/self.current.visits
 
 
     def run_monte_carlo(self, nr_of_turns:int, input_mod, scoring_function):
         for _ in range(nr_of_turns):
-            repr_subtree(self.root)
             self.current = self.root
             score = self.get_score(input_mod, scoring_function)
             while self.current:
                 self.current.visits+=1
                 self.update_score(score)
                 self.current = self.current.parent
+            logger.debug(self)
 
-
-def repr_subtree( root: State):
-        """
-        Print the subtree rooted at `root` in an ASCII-tree layout.
-        """
-        def _walk(node, prefix: str, label: str|None, is_last: bool):
-            # pick branch symbols
-            connector = "└── " if is_last else "├── "
-            label_str = f"[{label}] " if label else ""
-            print(prefix + connector + label_str + repr(node))
-
-            # prepare prefix for children
-            new_prefix = prefix + ("    " if is_last else "│   ")
-
-            # gather existing children in order
-            children = []
-            if node.true_child:
-                children.append(("True",  node.true_child))
-            if node.false_child:
-                children.append(("False", node.false_child))
-
-            # recurse
-            for idx, (lbl, child) in enumerate(children):
-                _walk(child, new_prefix, lbl, idx == len(children) - 1)
-        # print the root node itself (no connector or label)
-        print(repr(root))
-
-        # then its immediate children
-        root_children = []
-        if root.true_child:
-            root_children.append(("True",  root.true_child))
-        if root.false_child:
-            root_children.append(("False", root.false_child))
-
-        for idx, (lbl, child) in enumerate(root_children):
-            _walk(child, "", lbl, idx == len(root_children) - 1)
 
