@@ -11,13 +11,6 @@ fmt = "%(asctime)s.%(msecs)03d|%(levelname)s|%(name)s|%(funcName)s(): %(message)
 def list_of_args(args:str) -> list[str]:
     return args.split(',')
 
-
-# def get_baseline(path_to_file: str) -> float:
-#     filename = utils.basename(path_to_file)
-#     cmd = ['clang++','-O3' , path_to_file, '-o',f"{filename}_baseline.out" ]
-#     utils.get_cmd_output(cmd)
-#     return utils.measure_execution_time(f"{filename}_baseline.out", output=None)
-
 def parse_args_and_run():
     parser = argparse.ArgumentParser(
         prog="Monte Carlo Autotuner", 
@@ -26,6 +19,7 @@ def parse_args_and_run():
     # parser.add_argument('input_file', type=str, help="Path to input file") 
     parser.add_argument("--debug", default=False, action="store_true", help="Set the logging level to debug")
     parser.add_argument('-r', '--number-of-runs', type=int, default=50, help="Number of iterations to run the Monte Carlo Simulation")
+    # parser.add_argument('-i', '--initial-samples', type=int, default=5, help="Number of initial samples the adaptive benchmark generates.")
 
 
     args = parser.parse_args()
@@ -34,7 +28,6 @@ def parse_args_and_run():
 def main(args):
     if args.debug:
         logging.basicConfig(level=logging.DEBUG, format=fmt, datefmt=datefmt)
-        logger.debug("You are debugging.")
     else:
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
 
@@ -47,19 +40,23 @@ def main(args):
 def get_input_module():
     cmd = ['make', 'mod-pre-mc.bc']
     utils.get_cmd_output(cmd)
-    logger.debug("also debugging")
     with open("mod-pre-mc.bc", 'rb') as f:
         mod  = f.read()
     return mod
 
+def runtime_generator():
+    while True:
+        cmd = ['make', 'run']
+        outs = utils.get_cmd_output(cmd)
+        yield utils.readout_mc_inline_timer(outs.decode())
 
 
 def get_score(mod: bytes):
     with open("mod-post-mc.bc", 'wb') as f:
         f.write(mod)
-    cmd = ['make', 'run']
-    outs = utils.get_cmd_output(cmd)
-    return utils.readout_mc_inline_timer(outs.decode())
+    return utils.adaptive_benchmark(runtime_generator()).mean
+
+
 
 
 if __name__ == "__main__":
