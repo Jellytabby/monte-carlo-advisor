@@ -37,8 +37,14 @@ $(MODULE_BC): $(MODULE_SRC)
 $(MODULE_OBJ): $(MODULE_BC)
 	clang++ -O0 -c $< -o $@
 
+baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC)
+	clang++ -O1 $^ -o $@
+
+run_baseline: baseline.out
+	./baseline.out
+
 clean:
-	rm -f *.o *.bc $(OUT)
+	rm -f *.o *.bc *.out
 
 run: all
 	./$(OUT)

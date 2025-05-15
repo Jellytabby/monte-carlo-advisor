@@ -138,11 +138,11 @@ def adaptive_benchmark(
             if n == 0 and new_sample == 0:
                 logger.debug(f"Got zero")
                 return get_zero_rt_abr()
-            logger.debug(f"Obtained sample {new_sample}, len {len(samples)}")
+            logger.debug(f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
         n += 1
 
     if len(samples) < initial_samples:
-        logger.debug(f"Too many replay failures")
+        logger.error(f"Too many replay failures")
         sample_mean, relative_ci_width = get_benchmarking_mean_ci(samples, confidence)
         return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, False)
 
@@ -160,18 +160,30 @@ def adaptive_benchmark(
         new_sample = None
         while new_sample is None and n < max_samples:
             new_sample = next(iterator)
+            logger.debug(f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
             n += 1
         if new_sample is not None:
+
             samples = np.append(samples, float(new_sample))
 
-    logger.debug(f"Did not converge: mean {sample_mean}, ci {relative_ci_width}")
+    logger.error(f"Did not converge: mean {sample_mean}, ci {relative_ci_width}")
 
     if fail_on_non_convergence:
         return get_invalid_abr()
     else:
         return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, False)
 
+def get_speedup_factor(base: np.ndarray, opt: np.ndarray):
+    # This will get element wise speedup factors for all inputs where both succeeded
+    base = base[:len(opt)]
+    opt = opt[:len(base)]
 
+    arr = base / opt
+    arr = arr[~np.isnan(arr)]  # remove NaNs
+    if arr.size == 0:
+        return None
+    geomean = np.exp(np.mean(np.log(arr)))
+    return geomean
 
 if __name__ == "__main__":
     pass

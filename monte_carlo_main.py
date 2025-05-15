@@ -1,4 +1,6 @@
 import argparse
+
+from numpy import ndarray
 import inline_mc_advisor
 import utils
 import logging
@@ -32,8 +34,9 @@ def main(args):
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
 
     m = get_input_module()
+    baseline = get_baseline_runtime()
     advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
-    advisor.run_monte_carlo(args.number_of_runs, m, get_score)
+    advisor.run_monte_carlo(args.number_of_runs, m, lambda x: get_score(x, baseline))
 
 
 
@@ -44,17 +47,25 @@ def get_input_module():
         mod  = f.read()
     return mod
 
-def runtime_generator():
+def get_baseline_runtime():
+    cmd = ['make', 'run_baseline']
+    return utils.adaptive_benchmark(runtime_generator(cmd), initial_samples=5, max_samples=200).runtimes
+
+
+
+def runtime_generator(cmd:list[str]):
     while True:
-        cmd = ['make', 'run']
         outs = utils.get_cmd_output(cmd)
         yield utils.readout_mc_inline_timer(outs.decode())
 
 
-def get_score(mod: bytes):
+def get_score(mod: bytes, baseline:ndarray):
     with open("mod-post-mc.bc", 'wb') as f:
         f.write(mod)
-    return utils.adaptive_benchmark(runtime_generator()).mean
+    cmd = ['make', 'run']
+    runtimes = utils.adaptive_benchmark(runtime_generator(cmd), initial_samples=5).runtimes
+    return utils.get_speedup_factor(baseline, runtimes)
+
 
 
 

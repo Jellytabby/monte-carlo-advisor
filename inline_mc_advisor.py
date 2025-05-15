@@ -7,9 +7,10 @@ import interactive_host
 logger = logging.getLogger(__name__)
 
 class State:
-    def __init__(self, decisions=[], score=0.0, visits=0, true_child=None, false_child=None, parent=None):
+    def __init__(self, decisions=[], score=0.0, speedup_sum=0.0, visits=0, true_child=None, false_child=None, parent=None):
         self.decisions:list[bool] = decisions
         self.score:float = score
+        self.speedup_sum : float = speedup_sum
         self.visits:int = visits
         self.true_child:State|None = true_child
         self.false_child:State|None = false_child
@@ -17,7 +18,7 @@ class State:
 
     def __repr__(self) -> str:
         return (f"State(decisions={self.decisions!r}, "
-                f"score={self.score:.2f}," 
+                f"score={self.score:.7f}," 
                 f"visits={self.visits},")
 
     def repr_subtree(self):
@@ -153,9 +154,9 @@ class InlineMonteCarloAdvisor(object):
             optimized_mod = f2.read()
             return scoring_function(optimized_mod)
 
-    def update_score(self, score:float):
+    def update_score(self):
         assert self.current
-        self.current.score = (self.current.score-score)/self.current.visits
+        self.current.score = self.current.speedup_sum / self.current.visits # average speedup
 
 
     def run_monte_carlo(self, nr_of_turns:int, input_mod, scoring_function):
@@ -163,9 +164,10 @@ class InlineMonteCarloAdvisor(object):
             self.current = self.root
             score = self.get_score(input_mod, scoring_function)
             while self.current:
+                self.current.speedup_sum += score
                 self.current.visits+=1
-                self.update_score(score)
+                self.update_score()
                 self.current = self.current.parent
-            logger.debug(self)
+            logger.info(self)
 
 
