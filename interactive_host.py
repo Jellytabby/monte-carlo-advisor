@@ -49,95 +49,13 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     f.flush()
 
 
-# def run_interactive(
-#     temp_rootname: str,
-#     make_response: Callable[[List[log_reader.TensorValue]], Union[int, float, list]],
-#     process_and_args: List[str], before_advice = None, after_advice = None
-# ):
-#     """Host the compiler.
-#     Args:
-#       temp_rootname: the base file name from which to construct the 2 pipes for
-#       communicating with the compiler.
-#       make_response: a function that, given the current tensor values, provides a
-#       response.
-#       process_and_args: the full commandline for the compiler. It it assumed it
-#       contains a flag poiting to `temp_rootname` so that the InteractiveModeRunner
-#       would attempt communication on the same pair as this function opens.
-#
-#     This function sets up the communication with the compiler - via 2 files named
-#     `temp_rootname`.in and `temp_rootname`.out - prints out the received features,
-#     and sends back to the compiler an advice (which it gets from `make_response`).
-#     It's used for testing, and also to showcase how to set up communication in an
-#     interactive ML ("gym") environment.
-#     """
-#     to_compiler = temp_rootname + ".in"
-#     from_compiler = temp_rootname + ".out"
-#
-#     try:
-#         os.mkfifo(to_compiler, 0o666)
-#         os.mkfifo(from_compiler, 0o666)
-#         compiler_proc = subprocess.Popen(
-#             process_and_args, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL
-#         )
-#         # try:
-#         # _, errs = compiler_proc.communicate(timeout=15)
-#         # print(errs.decode())
-#         #     if errs:
-#         #         logger.error(errs.decode())
-#         #     compiler_proc.kill()
-#         #     exit(-1)
-#         # except subprocess.TimeoutExpired:
-#         #     print("IN EXCEPTION")
-#         #     compiler_proc.kill()
-#         #     exit(-1)
-#
-#
-#         with io.BufferedWriter(io.FileIO(to_compiler, "wb")) as tc, \
-#              io.BufferedReader(io.FileIO(from_compiler, "rb")) as fc:
-#             tensor_specs, _, advice_spec = log_reader.read_header(fc)
-#             context = None
-#             while compiler_proc.poll() is None:
-#                 # print("in while reee")
-#                 next_event = fc.readline()
-#                 if not next_event:
-#                     break
-#                 (
-#                     last_context,
-#                     observation_id,
-#                     features,
-#                     _,
-#                 ) = log_reader.read_one_observation(
-#                     context, next_event, fc, tensor_specs, None
-#                 )
-#                 if last_context != context:
-#                     print(f"context: {last_context}")
-#                 context = last_context
-#                 print(f"observation: {observation_id}")
-#                 tensor_values = []
-#                 for fv in features:
-#                     # log_reader.pretty_print_tensor_value(fv)
-#                     tensor_values.append(fv)
-#                 if before_advice is not None:
-#                     before_advice(tc, fc)
-#                 send(tc, make_response(tensor_values), advice_spec)
-#                 if after_advice is not None:
-#                     after_advice(tc, fc)
-#         _, err = compiler_proc.communicate()
-#         print(err.decode("utf-8"))
-#         # outs, errs = compiler_proc.communicate()
-#         compiler_proc.wait()
-#
-#     finally:
-#         os.unlink(to_compiler)
-#         os.unlink(from_compiler)
 
 def clean_up_process(process:subprocess.Popen[bytes]):
-    logger.warning("opt gave context but not observations")
     outs, errs = process.communicate()
-    logger.warning(f"Errs: {errs.decode('utf-8')}")
-    logger.warning(f"Outs size {len(outs)}")
+    logger.debug(f"Errs: {errs.decode('utf-8')}")
+    logger.debug(f"Outs size {len(outs)}")
     status = process.wait()
-    logger.warning(f"Status {status}")
+    logger.debug(f"Status {status}")
     return status
 
 
@@ -262,6 +180,8 @@ def run_interactive(
 
                     while (len(fc.peek(1)) <= 0 ):
                         if compiler_proc.poll() is not None:
+                            logger.warning("opt gave context but not observations")
+                            clean_up_process(compiler_proc)
                             return
 
                     logger.debug(f"Len of readable content {len(fc.peek(1))}")
@@ -296,13 +216,7 @@ def run_interactive(
 
         set_blocking(compiler_proc.stdout)
 
-        outs, errs = compiler_proc.communicate()
-        outs = output_module + outs
-        logger.debug("Errs")
-        logger.debug(errs.decode("utf-8"))
-        logger.debug(f"Outs size {len(outs)}")
-        status = compiler_proc.wait()
-        logger.debug(f"Status {status}")
+        status = clean_up_process(compiler_proc)
         if status != 0:
             exit(-1)
 
