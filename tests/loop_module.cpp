@@ -29,9 +29,9 @@ void run_triplet_loop(int length,
         loop_add_mul(i, j, k, a, b, c);
         loop_add_sub(i, j, k, a, b, c);
         loop_sub_sub(i, j, k, a, b, c);
-        loop_add_mul(i, j, k, a, b, c);
-        loop_add_sub(i, j, k, a, b, c);
-        loop_sub_sub(i, j, k, a, b, c);
+        // loop_add_mul(i, j, k, a, b, c);
+        // loop_add_sub(i, j, k, a, b, c);
+        // loop_sub_sub(i, j, k, a, b, c);
       }
     }
   }

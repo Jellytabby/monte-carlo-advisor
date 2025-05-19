@@ -4,7 +4,8 @@ PROF_SRC    := inline_profiler.cpp
 OUT         := a.out
 
 MAIN_OBJ    := $(MAIN_SRC:.cpp=.o)
-MODULE_BC   := mod-pre-mc.bc
+MODULE_PRE_BC   := mod-pre-mc.bc
+MODULE_POST_BC   := mod-post-mc.bc
 MODULE_OBJ  := mod-post-mc.o
 PROF_OBJ    := $(PROF_SRC:.cpp=.o)
 
@@ -14,7 +15,7 @@ PROF_OBJ    := $(PROF_SRC:.cpp=.o)
 
 .PHONY: all clean run
 
-all: $(OUT)
+all: $(OUT) $(MODULE_POST_BC)
 
 # link final executable
 $(OUT): $(MAIN_OBJ) $(PROF_OBJ) $(MODULE_OBJ)
@@ -29,16 +30,19 @@ $(PROF_OBJ): $(PROF_SRC)
 	clang++ -O3 -c $< -o $@
 
 # emit LLVM bitcode from your loop source
-$(MODULE_BC): $(MODULE_SRC)
-	clang++ -O1 -Xclang -disable-llvm-passes -emit-llvm \
+$(MODULE_PRE_BC): $(MODULE_SRC)
+	clang++ -O3 -Xclang -disable-llvm-passes -emit-llvm \
 	         -c $< -o $@
 
+$(MODULE_POST_BC): $(MODULE_PRE_BC)
+	opt -O3 $< -o $@
+
 # compile post-pass object from bitcode
-$(MODULE_OBJ): $(MODULE_BC)
-	clang++ -O0 -c $< -o $@
+$(MODULE_OBJ): $(MODULE_POST_BC)
+	clang++ -O3 -c $< -o $@
 
 baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC)
-	clang++ -O1 $^ -o $@
+	clang++ -O3 $^ -o $@
 
 run_baseline: baseline.out
 	./baseline.out

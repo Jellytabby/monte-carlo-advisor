@@ -49,11 +49,11 @@ def get_input_module():
 
 def get_baseline_runtime():
     cmd = ['make', 'run_baseline']
-    return utils.adaptive_benchmark(runtime_generator(cmd), initial_samples=5, max_samples=200).runtimes
-
+    return utils.adaptive_benchmark(runtime_generator(cmd), initial_samples=10, max_samples=200).runtimes
 
 
 def runtime_generator(cmd:list[str]):
+    logger.debug(cmd)
     while True:
         outs = utils.get_cmd_output(cmd)
         yield utils.readout_mc_inline_timer(outs.decode())
@@ -63,7 +63,7 @@ def get_score(mod: bytes, baseline:ndarray):
     with open("mod-post-mc.bc", 'wb') as f:
         f.write(mod)
     cmd = ['make', 'run']
-    runtimes = utils.adaptive_benchmark(runtime_generator(cmd), initial_samples=5).runtimes
+    runtimes = utils.adaptive_benchmark(runtime_generator(cmd), initial_samples=10).runtimes
     return utils.get_speedup_factor(baseline, runtimes)
 
 

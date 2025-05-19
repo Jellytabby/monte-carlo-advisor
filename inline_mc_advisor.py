@@ -6,15 +6,15 @@ import interactive_host
 
 logger = logging.getLogger(__name__)
 
-class State:
+class InlineState:
     def __init__(self, decisions=[], score=0.0, speedup_sum=0.0, visits=0, true_child=None, false_child=None, parent=None):
         self.decisions:list[bool] = decisions
         self.score:float = score
         self.speedup_sum : float = speedup_sum
         self.visits:int = visits
-        self.true_child:State|None = true_child
-        self.false_child:State|None = false_child
-        self.parent:State|None = parent
+        self.true_child:InlineState|None = true_child
+        self.false_child:InlineState|None = false_child
+        self.parent:InlineState|None = parent
 
     def __repr__(self) -> str:
         return (f"State(decisions={self.decisions!r}, "
@@ -64,17 +64,17 @@ class State:
 
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other, State):
+        if not isinstance(other, InlineState):
             return NotImplemented
         return self.score == other.score
 
     def __lt__(self, other) -> bool:
-        if not isinstance(other, State):
+        if not isinstance(other, InlineState):
             return NotImplemented
         return self.score < other.score
 
     def add_child(self, choice:bool):
-        child = State(self.decisions[:] + [choice])
+        child = InlineState(self.decisions[:] + [choice])
         if choice:
             self.true_child = child
         else:
@@ -87,18 +87,13 @@ class State:
 
 class InlineMonteCarloAdvisor(object):
     def __init__(self, C=sqrt(2)):
-        self.root:State = State()
-        self.current:State|None = self.root
+        self.root:InlineState = InlineState()
+        self.current:InlineState|None = self.root
         self.C:float = C # exploration factor for UCT
-        self.best_state:State
+        self.best_state:InlineState
 
     def __repr__(self):
         return self.root.repr_subtree()
-
-    def advice_false(self, _) -> bool:
-        return False
-    def advice_true(self, _) -> bool:
-        return True
 
     def advice(self, _) -> bool:
         assert self.current
@@ -109,7 +104,7 @@ class InlineMonteCarloAdvisor(object):
             self.current = next
             return next.decisions[-1]
 
-    def get_next_state(self, state:State) -> State:
+    def get_next_state(self, state:InlineState) -> InlineState:
         children = (state.true_child, state.false_child)
         
         match children:
@@ -125,7 +120,7 @@ class InlineMonteCarloAdvisor(object):
             case (true_child, false_child):
                 return true_child if self.uct(true_child) > self.uct(false_child) else false_child
 
-    def uct(self, state:State) -> float:
+    def uct(self, state:InlineState) -> float:
         assert state.parent
         return state.score + self.C * sqrt(log(state.parent.visits)/state.visits)
 
@@ -144,8 +139,10 @@ class InlineMonteCarloAdvisor(object):
                 f"{filename}.channel-basename", 
                 self.advice,
                 ['opt',
-                '-passes=scc-oz-module-inliner',
+                "-passes=default<O3>,scc-oz-module-inliner",
+                # '-passes=scc-oz-module-inliner',
                 '-interactive-model-runner-echo-reply',
+                # '--debug',
                 '-enable-ml-inliner=release',
                 f"-inliner-interactive-channel-base={filename}.channel-basename",
                 '-o', f2.name,
