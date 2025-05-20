@@ -38,8 +38,11 @@ $(MODULE_POST_BC): $(MODULE_PRE_BC)
 	opt -O3 $< -o $@
 
 # compile post-pass object from bitcode
+# $(MODULE_OBJ): $(MODULE_POST_BC)
+# 	clang++ -O3 --debug=inline -c $< -o $@
+
 $(MODULE_OBJ): $(MODULE_POST_BC)
-	clang++ -O3 -c $< -o $@
+	llc -O3 -filetype=obj $< -o $@
 
 baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC)
 	clang++ -O3 $^ -o $@

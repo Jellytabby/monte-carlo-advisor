@@ -142,11 +142,12 @@ class InlineMonteCarloAdvisor(object):
             interactive_host.run_interactive(
                 f"{filename}.channel-basename", 
                 self.advice,
+                # lambda _ : False,
                 ['opt',
                 "-passes=default<O3>,scc-oz-module-inliner",
                 # '-passes=scc-oz-module-inliner',
                 '-interactive-model-runner-echo-reply',
-                # '--debug',
+                '-debug-only=inline',
                 '-enable-ml-inliner=release',
                 f"-inliner-interactive-channel-base={filename}.channel-basename",
                 '-o', f2.name,
@@ -177,6 +178,7 @@ class InlineMonteCarloAdvisor(object):
                 self.current.visits+=1
                 self.update_score()
                 self.current = self.current.parent
-            logger.info(self)
+            logger.debug(self)
+        logger.info(self)
         logger.info(f"Highest scoring: {self.get_max_leaf_state()}")
 
