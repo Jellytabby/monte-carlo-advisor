@@ -1,3 +1,5 @@
+from __future__ import annotations
+from functools import total_ordering
 import logging
 import random
 from math import sqrt, log
@@ -6,6 +8,7 @@ import interactive_host
 
 logger = logging.getLogger(__name__)
 
+@total_ordering
 class InlineState:
     def __init__(self, decisions=[], score=0.0, speedup_sum=0.0, visits=0, true_child=None, false_child=None, parent=None):
         self.decisions:list[bool] = decisions
@@ -85,6 +88,7 @@ class InlineState:
     def is_leaf(self) -> bool:
         return not self.true_child and not self.false_child
 
+
 class InlineMonteCarloAdvisor(object):
     def __init__(self, C=sqrt(2)):
         self.root:InlineState = InlineState()
@@ -155,6 +159,14 @@ class InlineMonteCarloAdvisor(object):
         assert self.current
         self.current.score = self.current.speedup_sum / self.current.visits # average speedup
 
+    def get_max_leaf_state(self) -> InlineState:
+        def get_max_leaf_state_helper(current:InlineState | None, max_state:InlineState) -> InlineState:
+            if current is None:
+                return max_state
+            if current.is_leaf():
+                return max(current, max_state)
+            return max(get_max_leaf_state_helper(current.true_child, max_state), get_max_leaf_state_helper(current.false_child, max_state))
+        return get_max_leaf_state_helper(self.root, self.root)
 
     def run_monte_carlo(self, nr_of_turns:int, input_mod, scoring_function):
         for _ in range(nr_of_turns):
@@ -166,5 +178,5 @@ class InlineMonteCarloAdvisor(object):
                 self.update_score()
                 self.current = self.current.parent
             logger.info(self)
-
+        logger.info(f"Highest scoring: {self.get_max_leaf_state()}")
 
