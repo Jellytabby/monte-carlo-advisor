@@ -5,6 +5,8 @@ import random
 from math import sqrt, log
 import tempfile
 import interactive_host
+from log_reader import TensorValue
+import log_reader
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +66,7 @@ class InlineState:
         for idx, (lbl, child) in enumerate(root_children):
             _walk(child, "", lbl, idx == len(root_children) - 1)
 
-        return "".join(lines)
+        return "\n".join(lines)
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, InlineState):
@@ -132,6 +134,44 @@ class InlineMonteCarloAdvisor(object):
         choice = random.random()
         return True if choice >= 0.5 else False
 
+
+
+
+    def get_inital_tree(self, input_mod: bytes):
+        self.root.score = 1.0
+        self.root.visits = 1
+        def extract_default_inlining_decision_from_tensor(tv:list[log_reader.TensorValue]):
+            assert self.current
+            default_inilining_decisison = tv[-1][0]
+            child = self.current.add_child(default_inilining_decisison)
+            child.score = 1.0
+            child.visits = 1
+            self.current = child
+            return default_inilining_decisison
+
+
+        filename = "mod_temp"
+        with tempfile.NamedTemporaryFile(suffix=".ll") as f1, \
+                tempfile.NamedTemporaryFile(suffix=".bc") as f2:
+            f1.write(input_mod)
+            f1.flush()
+
+            interactive_host.run_interactive(
+                f"{filename}.channel-basename",
+                extract_default_inlining_decision_from_tensor,
+                ['opt',
+                 # "-passes=inline",
+                 '-O3',
+                 # "-passes=default<O3>,scc-oz-module-inliner",
+                 "-inliner-interactive-include-default",
+                 '-interactive-model-runner-echo-reply',
+                 # '-debug-only=inline',
+                 '-enable-ml-inliner=release',
+                 f"-inliner-interactive-channel-base={filename}.channel-basename",
+                 '-o', f2.name,
+                 f1.name
+                 ])
+
     def get_score(self, input_mod: bytes, scoring_function):
         filename = "mod_temp"
         with tempfile.NamedTemporaryFile(suffix=".ll") as f1, \
@@ -172,6 +212,8 @@ class InlineMonteCarloAdvisor(object):
         return get_max_leaf_state_helper(self.root, self.root)
 
     def run_monte_carlo(self, nr_of_turns: int, input_mod, scoring_function):
+        self.get_inital_tree(input_mod)
+        logger.info(self)
         for _ in range(nr_of_turns):
             self.current = self.root
             score = self.get_score(input_mod, scoring_function)
