@@ -51,7 +51,8 @@ class TensorValue:
     def __init__(self, spec: TensorSpec, buffer: bytes):
         self._spec = spec
         self._buffer = buffer
-        self._view = ctypes.cast(self._buffer, ctypes.POINTER(self._spec.element_type))
+        self._view = ctypes.cast(
+            self._buffer, ctypes.POINTER(self._spec.element_type))
         self._len = math.prod(self._spec.shape)
 
     def spec(self) -> TensorSpec:
@@ -72,15 +73,21 @@ def read_tensor(fs: io.BufferedReader, ts: TensorSpec) -> TensorValue:
     return TensorValue(ts, data)
 
 
+def string_tensor_value(tv: TensorValue) -> str:
+    return f'{tv.spec().name}: {",".join([str(v) for v in tv])}'
+
+
 def pretty_print_tensor_value(tv: TensorValue):
-    print(f'{tv.spec().name}: {",".join([str(v) for v in tv])}')
+    print(string_tensor_value(tv))
 
 
 def read_header(f: io.BufferedReader):
     header = json.loads(f.readline())
     tensor_specs = [TensorSpec.from_dict(ts) for ts in header["features"]]
-    score_spec = TensorSpec.from_dict(header["score"]) if "score" in header else None
-    advice_spec = TensorSpec.from_dict(header["advice"]) if "advice" in header else None
+    score_spec = TensorSpec.from_dict(
+        header["score"]) if "score" in header else None
+    advice_spec = TensorSpec.from_dict(
+        header["advice"]) if "advice" in header else None
     return header, tensor_specs, score_spec, advice_spec
 
 

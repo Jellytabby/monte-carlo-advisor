@@ -34,6 +34,10 @@ $(MODULE_PRE_BC): $(MODULE_SRC)
 	clang++ -O3 -Xclang -disable-llvm-passes -emit-llvm \
 	         -c $< -o $@
 
+readable: $(MODULE_SRC)
+	clang++ -O3 -Xclang -disable-llvm-passes -emit-llvm \
+	         -S $< -o readable.ll
+
 $(MODULE_POST_BC): $(MODULE_PRE_BC)
 	opt -O3 $< -o $@
 

@@ -10,74 +10,78 @@ from scipy import stats
 
 logger = logging.getLogger(__name__)
 
-def basename(file:str) -> str:
+
+def basename(file: str) -> str:
     return Path(file).stem
 
+
 def get_cmd_output(
+    cmd,
+    stdin=None,
+    timeout=None
+):
+    logger.debug(f"Running cmd: {' '.join(cmd)}")
+
+    # sns = False if cmd[0] != "clang++" else True
+    # Only clang++ needs it but just in case let's use a process group for everything
+
+    with subprocess.Popen(
         cmd,
-        stdin=None,
-        timeout=None
-    ):
-        logger.debug(f"Running cmd: {' '.join(cmd)}")
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=(subprocess.PIPE if stdin is not None else None),
+    ) as proc:
+        try:
+            outs, errs = proc.communicate(input=stdin, timeout=timeout)
+            status = proc.wait()
+        # except subprocess.TimeoutExpired as e:
+        #     if sns:
+        #         kill_fn = kill_proc_sns
+        #         terminate_fn = terminate_proc_sns
+        #     else:
+        #         kill_fn = kill_proc
+        #         terminate_fn = terminate_proc
+        #
+        #     logger.debug("Process timed out! Terminating...")
+        #     terminate_fn(proc)
+        #     try:
+        #         proc.communicate(timeout=1)
+        #     except subprocess.TimeoutExpired as e:
+        #         logger.debug("Termination timed out! Killing...")
+        #         kill_fn(proc)
+        #         proc.communicate()
+        #
+        #         logger.debug("Killed.")
+        #         raise InputGenTimeout(f"Timed out: {cmd}")
+        #
+        #     logger.debug("Terminated.")
+        #     raise InputGenTimeout(f"Timed out: {cmd}")
+        except subprocess.TimeoutExpired as e:
+            print(f"Some error {e}")
+            exit(-1)
 
-        # sns = False if cmd[0] != "clang++" else True
-        # Only clang++ needs it but just in case let's use a process group for everything
+        if status != 0:
+            logger.error(f"Exit with status {status}")
+            logger.error(f"Command run: {' '.join(cmd)}")
+            logger.error("Output:")
+            logger.error(errs.decode())
 
-        with subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=(subprocess.PIPE if stdin is not None else None),
-        ) as proc:
-            try:
-                outs, errs = proc.communicate(input=stdin, timeout=timeout)
-                status = proc.wait()
-            # except subprocess.TimeoutExpired as e:
-            #     if sns:
-            #         kill_fn = kill_proc_sns
-            #         terminate_fn = terminate_proc_sns
-            #     else:
-            #         kill_fn = kill_proc
-            #         terminate_fn = terminate_proc
-            #
-            #     logger.debug("Process timed out! Terminating...")
-            #     terminate_fn(proc)
-            #     try:
-            #         proc.communicate(timeout=1)
-            #     except subprocess.TimeoutExpired as e:
-            #         logger.debug("Termination timed out! Killing...")
-            #         kill_fn(proc)
-            #         proc.communicate()
-            #
-            #         logger.debug("Killed.")
-            #         raise InputGenTimeout(f"Timed out: {cmd}")
-            #
-            #     logger.debug("Terminated.")
-            #     raise InputGenTimeout(f"Timed out: {cmd}")
-            except subprocess.TimeoutExpired as e:
-                print(f"Some error {e}")
-                exit(-1)
-               
-            if status != 0:
-                logger.error(f"Exit with status {status}")
-                logger.error(f"Command run: {' '.join(cmd)}")
-                logger.error(f"Output:")
-                logger.error(errs.decode())
+            logger.error("Failed.")
+            exit(status)
 
-                logger.error("Failed.")
-                exit(status)
+        logger.debug("Finished.")
+        logger.debug(f"Output: {outs.decode()}")
+        return outs
 
-            logger.debug("Finished.")
-            logger.debug(f"Output: {outs.decode()}")
-            return outs
 
-def readout_mc_inline_timer(input:str) -> int|None:
+def readout_mc_inline_timer(input: str) -> int | None:
     re_match = re.search("MC_INLINE_TIMER ([0-9]+)", input)
     if re_match is None:
         return None
     else:
         f = int(re_match.group(1))
         return f
+
 
 def get_benchmarking_mean_ci(samples, confidence):
     if len(samples) == 0:
@@ -99,6 +103,7 @@ def get_benchmarking_mean_ci(samples, confidence):
     margin_error = t_crit * (sample_std / np.sqrt(n))
     relative_ci_width = (2 * margin_error) / sample_mean
     return sample_mean, relative_ci_width
+
 
 def adaptive_benchmark(
     iterator,
@@ -136,14 +141,16 @@ def adaptive_benchmark(
             new_sample = float(new_sample)
             samples = np.append(samples, new_sample)
             if n == 0 and new_sample == 0:
-                logger.debug(f"Got zero")
+                logger.debug("Got zero")
                 return get_zero_rt_abr()
-            logger.debug(f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
+            logger.debug(
+                f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
         n += 1
 
     if len(samples) < initial_samples:
-        logger.error(f"Too many replay failures")
-        sample_mean, relative_ci_width = get_benchmarking_mean_ci(samples, confidence)
+        logger.error("Too many replay failures")
+        sample_mean, relative_ci_width = get_benchmarking_mean_ci(
+            samples, confidence)
         return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, False)
 
     assert n < max_samples
@@ -151,27 +158,32 @@ def adaptive_benchmark(
     sample_mean = 0.0
     relative_ci_width = 0.0
     while n < max_samples:
-        sample_mean, relative_ci_width = get_benchmarking_mean_ci(samples, confidence)
+        sample_mean, relative_ci_width = get_benchmarking_mean_ci(
+            samples, confidence)
 
         if relative_ci_width < relative_ci_threshold:
-            logger.debug(f"Converged: mean {sample_mean}, ci {relative_ci_width}")
+            logger.debug(
+                f"Converged: mean {sample_mean}, ci {relative_ci_width}")
             return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, True)
 
         new_sample = None
         while new_sample is None and n < max_samples:
             new_sample = next(iterator)
-            logger.debug(f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
+            logger.debug(
+                f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
             n += 1
         if new_sample is not None:
 
             samples = np.append(samples, float(new_sample))
 
-    logger.error(f"Did not converge: mean {sample_mean}, ci {relative_ci_width}")
+    logger.error(
+        f"Did not converge: mean {sample_mean}, ci {relative_ci_width}")
 
     if fail_on_non_convergence:
         return get_invalid_abr()
     else:
         return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, False)
+
 
 def get_speedup_factor(base: np.ndarray, opt: np.ndarray):
     # This will get element wise speedup factors for all inputs where both succeeded
@@ -184,6 +196,7 @@ def get_speedup_factor(base: np.ndarray, opt: np.ndarray):
         return None
     geomean = np.exp(np.mean(np.log(arr)))
     return geomean
+
 
 if __name__ == "__main__":
     pass

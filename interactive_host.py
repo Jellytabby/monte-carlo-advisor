@@ -14,7 +14,6 @@ test/CodeGen/MLRegAlloc/interactive-mode.ll
 import ctypes
 import json
 import logging
-import sys
 import log_reader
 import io
 import math
@@ -39,7 +38,8 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
         assert False
 
     if isinstance(value, list):
-        to_send = (ctype_func * len(value))(*[convert_el_func(el) for el in value])
+        to_send = (ctype_func * len(value))(*
+                                            [convert_el_func(el) for el in value])
     else:
         to_send = ctype_func(convert_el_func(value))
 
@@ -49,10 +49,9 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     f.flush()
 
 
-
-def clean_up_process(process:subprocess.Popen[bytes]):
+def clean_up_process(process: subprocess.Popen[bytes]):
     outs, errs = process.communicate()
-    logger.debug(f"Errs: {errs.decode('utf-8')}")
+    logger.info(f"\n{errs.decode('utf-8')}")
     logger.debug(f"Outs size {len(outs)}")
     status = process.wait()
     logger.debug(f"Status {status}")
@@ -60,12 +59,11 @@ def clean_up_process(process:subprocess.Popen[bytes]):
 
 
 def run_interactive(
-    temp_rootname:str,
+    temp_rootname: str,
     make_response: Callable[[List[log_reader.TensorValue]], Union[int, float, list]],
-    process_and_args: list[str], before_advice = None, after_advice = None
-      
+    process_and_args: list[str], before_advice=None, after_advice=None
 ):
-    
+
     to_compiler = temp_rootname + ".in"
     from_compiler = temp_rootname + ".out"
 
@@ -94,7 +92,7 @@ def run_interactive(
             stdout=subprocess.PIPE,
             # stdin=subprocess.PIPE,
         )
-        logger.debug(f"Sending module")
+        logger.debug("Sending module")
         # compiler_proc.stdin.write(mod)
 
         # FIXME is this the proper way to close the pipe? if we don't set it to
@@ -112,7 +110,7 @@ def run_interactive(
         output_module = b""
         set_nonblocking(compiler_proc.stdout)
 
-        logger.debug(f"Starting communication")
+        logger.debug("Starting communication")
 
         with io.BufferedWriter(io.FileIO(to_compiler, "w+b")) as tc:
             with io.BufferedReader(io.FileIO(from_compiler, "r+b")) as fc:
@@ -122,8 +120,8 @@ def run_interactive(
                 # mode for the actual communication.
 
                 # while True:
-                    # print(compiler_proc.poll()) if compiler_proc is not None else ()
-                    # print(fc.readline())
+                # print(compiler_proc.poll()) if compiler_proc is not None else ()
+                # print(fc.readline())
 
                 def input_available():
                     nonlocal output_module
@@ -153,7 +151,8 @@ def run_interactive(
 
                 set_blocking(fc)
 
-                header, tensor_specs, _, advice_spec = log_reader.read_header(fc)
+                header, tensor_specs, _, advice_spec = log_reader.read_header(
+                    fc)
                 context = None
 
                 set_nonblocking(fc)
@@ -174,13 +173,15 @@ def run_interactive(
                     if not next_event:
                         break
                     event = json.loads(next_event)
-                    if "observation" not in event and "context" not in event: # when runnning with O3 enabled, we have multiple passes, with multiple headers
+                    # when runnning with O3 enabled, we have multiple passes, with multiple headers
+                    if "observation" not in event and "context" not in event:
                         assert event == header
                         continue
 
-                    while (len(fc.peek(1)) <= 0 ):
+                    while (len(fc.peek(1)) <= 0):
                         if compiler_proc.poll() is not None:
-                            logger.warning("opt gave context but not observations")
+                            logger.warning(
+                                "opt gave context but not observations")
                             clean_up_process(compiler_proc)
                             return
 
@@ -197,17 +198,16 @@ def run_interactive(
                         logger.debug(f"context: {last_context}")
                     context = last_context
                     logger.debug(f"observation: {observation_id}")
-                    tensor_values:list[log_reader.TensorValue] = []
+                    tensor_values: list[log_reader.TensorValue] = []
                     for fv in features:
                         # logger.debug(fv.to_numpy())
+                        logger.debug(log_reader.string_tensor_value(fv))
                         tensor_values.append(fv)
-
                     if before_advice is not None:
                         before_advice(tc, fc)
                     send(tc, make_response(tensor_values), advice_spec)
                     if after_advice is not None:
                         after_advice(tc, fc)
-
 
                     cur_decision += 1
                     # set_nonblocking(fc)
