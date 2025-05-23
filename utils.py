@@ -104,9 +104,28 @@ def get_benchmarking_mean_ci(samples, confidence):
     relative_ci_width = (2 * margin_error) / sample_mean
     return sample_mean, relative_ci_width
 
+def remove_outliers_tscore(samples , alpha: float = 0.05):
+    """
+    Remove any sample whose studentized residual |t_i| exceeds
+    the two‐sided t_crit (df=n-1) at level alpha, mutating samples.
+    """
+    n = len(samples)
+    if n < 2:
+        return
+
+    mean = samples.mean()
+    std  = samples.std(ddof=1)
+    # studentized residuals
+    t_vals = (samples - mean) / std
+    # two-sided critical threshold
+    t_crit = stats.t.ppf(1 - alpha/2, df=n-1)
+    keep_mask = np.abs(t_vals) <= t_crit
+    logger.debug(f"Removed {len([x for x in keep_mask if x == False])} outliers from {len(samples)} samples.")
+    return samples[keep_mask]
 
 def adaptive_benchmark(
     iterator,
+    warmup_runs,
     initial_samples=5,
     max_initial_samples=20,
     max_samples=50,
@@ -131,10 +150,14 @@ def adaptive_benchmark(
     assert max_initial_samples < max_samples
 
     logger.debug("Starting adaptive benchmarking")
-
+    
     samples = np.array([], dtype=float)
-
     n = 0
+
+    if warmup_runs>0:
+        logger.debug("Starting warmup runs")
+        for _ in range(warmup_runs):
+            next(iterator)
     while len(samples) < initial_samples and n < max_initial_samples:
         new_sample = next(iterator)
         if new_sample is not None:
@@ -155,6 +178,8 @@ def adaptive_benchmark(
 
     assert n < max_samples
 
+
+    samples = remove_outliers_tscore(samples)
     sample_mean = 0.0
     relative_ci_width = 0.0
     while n < max_samples:

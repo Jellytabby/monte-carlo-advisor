@@ -5,7 +5,6 @@ import random
 from math import sqrt, log
 import tempfile
 import interactive_host
-from log_reader import TensorValue
 import log_reader
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,7 @@ class InlineState:
         self.parent: InlineState | None = parent
 
     def __repr__(self) -> str:
-        return (f"State(decisions={self.decisions!r}, "
+        return (f"State(decisions={list(map(int, self.decisions))}, "
                 f"score={self.score:.7f},"
                 f"visits={self.visits})")
 
@@ -145,6 +144,7 @@ class InlineMonteCarloAdvisor(object):
             default_inilining_decisison = tv[-1][0]
             child = self.current.add_child(default_inilining_decisison)
             child.score = 1.0
+            child.speedup_sum = 1.0
             child.visits = 1
             self.current = child
             return default_inilining_decisison
@@ -165,7 +165,7 @@ class InlineMonteCarloAdvisor(object):
                  # "-passes=default<O3>,scc-oz-module-inliner",
                  "-inliner-interactive-include-default",
                  '-interactive-model-runner-echo-reply',
-                 # '-debug-only=inline',
+                 '-debug-only=inline',
                  '-enable-ml-inliner=release',
                  f"-inliner-interactive-channel-base={filename}.channel-basename",
                  '-o', f2.name,

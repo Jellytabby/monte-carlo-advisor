@@ -1,13 +1,15 @@
+void run_recursions(int);
+
 extern "C" void __mc_inline_begin(void);
 extern "C" void __mc_inline_end(void);
 
-void run_recursions(int);
-
 int main() {
-  int n = 30;
+  int n = 2000000;
 
   __mc_inline_begin();
-  run_recursions(n);
+  for (int i = 0; i < n; i++) {
+    run_recursions(i);
+  }
   __mc_inline_end();
 
   return 0;
