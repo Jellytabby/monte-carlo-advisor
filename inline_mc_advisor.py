@@ -1,7 +1,9 @@
 from __future__ import annotations
 import logging
+from math import sqrt
 import random
 from typing import final
+import inline_runner
 from mc_advisor import State, MonteCarloAdvisor
 
 logger = logging.getLogger(__name__)
@@ -9,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 @final
 class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
+    def __init__(self, C: float = sqrt(2)) -> None:
+        super().__init__(C)
+        self.runner = inline_runner.InlineCompilerCommunicator()
+
     def opt_args(self) -> list[str]:
         filename = type(self).__name__
         return [
@@ -23,9 +29,15 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             f"-inliner-interactive-channel-base={filename}.channel-basename",
         ]
 
+    def wrap_advice(self, advice: bool) -> bool:
+        return advice
+
     def get_rollout_decision(self) -> bool:
         choice = random.random()
         return True if choice >= 0.5 else False
+
+    def get_default_decision(self, tv, heuristic) -> bool:
+        return bool(tv[-1][0])
 
     def get_next_state(self, state: State[bool]) -> State[bool]:
         if state.is_leaf():
@@ -39,13 +51,3 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             return state.add_child(False)
         else:
             assert False
-
-    def extract_default_decision_from_tensor(self, tv) -> bool:
-        assert self.current
-        default_inilining_decisison = bool(tv[-1][0])
-        child = self.current.add_child(default_inilining_decisison)
-        child.score = 1.0
-        child.speedup_sum = 1.0
-        child.visits = 1
-        self.current = child
-        return default_inilining_decisison

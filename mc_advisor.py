@@ -4,7 +4,7 @@ from math import log, sqrt
 import tempfile
 from typing import Any, Generic, Optional, TypeVar
 
-import interactive_host
+import log_reader
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.C = C
         self.root = State[D]()
         self.current = self.root
+        self.runner: Any
 
     def __repr__(self):
         return self.root.repr_subtree()
@@ -115,9 +116,26 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def get_next_state(self, state: State) -> State: ...
 
     @abstractmethod
-    def extract_default_decision_from_tensor(self, tv) -> D: ...
+    def get_default_decision(self, tv, heuristic) -> D: ...
+
+    @abstractmethod
+    def wrap_advice(self, advice: D) -> Any:
+        "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
+        return advice
 
     def get_initial_tree(self, input_mod: bytes):
+        def build_initial_path(
+            tv: list[log_reader.TensorValue] = [], heuristic=None
+        ) -> Any:
+            assert self.current
+            default_decision = self.get_default_decision(tv, heuristic)
+            child = self.current.add_child(default_decision)
+            child.score = 1.0
+            child.speedup_sum = 1.0
+            child.visits = 1
+            self.current = child
+            return self.wrap_advice(default_decision)
+
         self.root.score = 1.0
         self.root.speedup_sum = 1.0
         self.root.visits = 1
@@ -129,13 +147,13 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             f1.write(input_mod)
             f1.flush()
 
-            interactive_host.run_interactive(
+            self.runner.compile_once(
                 f"{filename}.channel-basename",
-                self.extract_default_decision_from_tensor,
+                build_initial_path,
                 self.opt_args() + ["-o", f2.name, f1.name],
             )
 
-    def advice(self, _) -> D:
+    def advice(self, tv, heuristic) -> Any:
         assert self.current
         if self.current.visits == 0:
             decision = self.get_rollout_decision()
@@ -143,7 +161,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             next = self.get_next_state(self.current)
             self.current = next
             decision = next.decisions[-1]
-        return decision
+        return self.wrap_advice(decision)
 
     def uct(self, state: State) -> float:
         parent = state.parent
@@ -158,7 +176,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             f1.write(input_mod)
             f1.flush()
 
-            interactive_host.run_interactive(
+            self.runner.compile_once(
                 f"{filename}.channel-basename",
                 self.advice,
                 self.opt_args() + ["-o", f2.name, f1.name],

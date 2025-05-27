@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Module for collect data of unroll runtime effect"""
+"""Module for communicate with compiler for unroll decisions"""
 
 import os
 import io
@@ -25,12 +25,6 @@ import math
 import logging
 from typing import Any, Callable, Tuple, BinaryIO, Union, List, Optional
 import log_reader
-
-# from .unroll_model import ADVICE_TENSOR_LEN, UNROLL_FACTOR_OFFSET, MAX_UNROLL_FACTOR
-
-# import tensorflow as tf
-
-# from compiler_opt.rl import log_reader
 
 logger = logging.getLogger(__name__)
 
@@ -72,15 +66,21 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     f.flush()
 
 
-# def make_response_for_factor(factor: int):
-#     l = [0.5 for _ in range(ADVICE_TENSOR_LEN)]
-#     if factor == 0 or factor == 1:
-#         return l
-#     assert factor <= MAX_UNROLL_FACTOR
-#     assert factor >= UNROLL_FACTOR_OFFSET
-#     assert factor - UNROLL_FACTOR_OFFSET < ADVICE_TENSOR_LEN
-#     l[factor - UNROLL_FACTOR_OFFSET] = 2.0
-#     return l
+def clean_up_process(process: subprocess.Popen[bytes]):
+    outs, errs = process.communicate()
+    logger.info(f"\n{selective_mlgo_output(errs.decode('utf-8'))}")
+    logger.debug(f"Outs size {len(outs)}")
+    status = process.wait()
+    logger.debug(f"Status {status}")
+    return status
+
+
+def selective_mlgo_output(log: str):
+    lines = log.splitlines(True)
+    lines = [l for l in lines if not l.startswith("unrolling_decision")]
+    lines = [l for l in lines if not "ShouldInstrument" in l]
+    lines = [("\n" + l) if l.startswith("Loop Unroll") else l for l in lines]
+    return "".join(lines)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -104,12 +104,10 @@ class CompilationResult:
     num_decisions: int
 
 
-class UnrollCompilerHost:
+class LoopUnrollCompilerCommunicator:
     def __init__(self, emit_assembly, debug):
         self.emit_assembly = emit_assembly
         self.debug = debug
-
-        self.cur_action = None
 
         self.num_decisions = None
         self.decisions = None
@@ -126,24 +124,20 @@ class UnrollCompilerHost:
         self.features_spec = None
         self.advice_spec = None
 
-    def on_features_collect(self, index, tensor_values):
+    def on_features_collect(self, tensor_values):
         if self.tensor_mode == "numpy":
             tensor_values = [tv.to_numpy() for tv in tensor_values]
         self.features.append(tensor_values)
 
-    def on_heuristic_print(self, index, heuristic):
+    def on_heuristic_print(self, heuristic):
         logger.debug(heuristic)
 
-    def on_action_print(self, index, action):
+    def on_action_print(self, action):
         logger.debug(action)
 
-    def on_action_save(self, index, action):
+    def on_action_save(self, action):
         logger.debug(f"Saving action {action}")
         self.cur_action = action
-
-    def get_replaced_response(self, heuristic, index, factor):
-        # return make_response_for_factor(heuristic)
-        pass
 
     def read_heuristic(self, fc):
         event = json.loads(fc.readline())
@@ -169,86 +163,6 @@ class UnrollCompilerHost:
     def get_features_spec(self):
         return self.features_spec
 
-    # def get_unroll_decision_results(self, mod, process_and_args, working_dir: str):
-    #     self.channel_base = os.path.join(working_dir, "channel")
-    #     self.to_compiler = self.channel_base + ".in"
-    #     self.from_compiler = self.channel_base + ".out"
-    #
-    #     self.process_and_args = process_and_args
-    #     args_to_add = [
-    #         f"--mlgo-loop-unroll-interactive-channel-base={self.channel_base}",
-    #         "--mlgo-loop-unroll-advisor-mode=development",
-    #     ]
-    #     if self.debug:
-    #         args_to_add.append("-debug-only=loop-unroll-development-advisor")
-    #     if self.emit_assembly:
-    #         args_to_add.append("-S")
-    #
-    #     process_name = os.path.split(self.process_and_args[0])[1]
-    #     if "clang" in process_name:
-    #         args_to_add = sum(
-    #             [[x[0], x[1]] for x in zip(["-mllvm"] * len(args_to_add), args_to_add)], []
-    #         )
-    #         raise Exception("Clang not supported")
-    #     elif "opt" in process_name:
-    #         pass
-    #     else:
-    #         raise Exception("Unknown compiler")
-    #
-    #     self.process_and_args = self.process_and_args + args_to_add
-    #
-    #     cr = self.compile_once(
-    #         mod,
-    #         self.on_features_collect,
-    #         self.on_heuristic_print,
-    #         self.on_action_print,
-    #         lambda index: None,
-    #         lambda index, tensor, heuristic: make_response_for_factor(heuristic),
-    #     )
-    #     if cr is None:
-    #         return
-    #     self.num_decisions = cr.num_decisions
-    #     if self.num_decisions == 0:
-    #         return
-    #     self.features_spec = cr.features_spec
-    #     self.advice_spec = cr.advice_spec
-    #
-    #     logger.debug(f"Found {self.num_decisions} decisions to make")
-    #     logger.debug(f"Collected features: {self.features}")
-    #
-    #     for decision in range(self.num_decisions):
-    #         logger.debug(f"Exploring decision: {decision}")
-    #         decision_results = []
-    #         # From factor = 1 (i.e. no unroll) to MAX_UNROLL_FACTOR inclusive
-    #         for factor in range(1, MAX_UNROLL_FACTOR + 1):
-    #             logger.debug(f"Exploring factor: {factor}")
-    #             cr = self.compile_once(
-    #                 mod,
-    #                 lambda index, features: (),
-    #                 lambda index, heuristic: (),
-    #                 lambda index, action: self.on_action_save(index, action)
-    #                 if index == decision
-    #                 else None,
-    #                 lambda index: ("__mlgo_unrolled_loop_begin", "__mlgo_unrolled_loop_end")
-    #                 if index == decision
-    #                 else None,
-    #                 lambda index, tensor, heuristic: make_response_for_factor(factor)
-    #                 if index == decision
-    #                 else make_response_for_factor(heuristic),
-    #             )
-    #             if cr is None:
-    #                 break
-    #             out_module = cr.module
-    #             decision_results.append(UnrollFactorResult(factor, self.cur_action, out_module))
-    #         else:
-    #             # If we did not break the above loop
-    #             ud = UnrollDecision(self.features[decision], decision_results)
-    #             logger.debug(pprint.pformat(ud))
-    #             logger.debug("Got result:")
-    #             yield ud
-    #             continue
-    #         break
-
     def compile_once(
         self,
         temp_rootname: str,
@@ -256,17 +170,16 @@ class UnrollCompilerHost:
             [List[log_reader.TensorValue], int], Union[int, float, list]
         ],
         process_and_args: list[str],
-        on_features: Callable[[int, list[log_reader.TensorValue]], Any],
-        on_heuristic: Callable[[int, int], Any],
-        on_action: Callable[[int, bool], Any],
-        get_instrument_response,
+        on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
+        on_heuristic: Optional[Callable[[int], Any]] = None,
+        on_action: Optional[Callable[[bool], Any]] = None,
+        get_instrument_response=lambda _: None,
     ):
         """
         on_features: operation on tensor with feature values
         on_heuristic: operation on default decision of compiler
         on_action: operation on whether given inline decision succeeded
         """
-        cur_decision = 0
         to_compiler = temp_rootname + ".in"
         from_compiler = temp_rootname + ".out"
         logger.debug(f"Opening pipes {to_compiler} and {from_compiler}")
@@ -349,9 +262,6 @@ class UnrollCompilerHost:
                     set_blocking(fc)
 
                     header, tensor_specs, _, advice_spec = log_reader.read_header(fc)
-                    # header = log_reader._read_header(fc)
-                    # tensor_specs = header.features
-                    # advice_spec = header.advice
                     context = None
 
                     set_nonblocking(fc)
@@ -389,15 +299,12 @@ class UnrollCompilerHost:
                             # logger.debug(log_reader.string_tensor_value(fv))
                             tensor_values.append(fv)
 
-                        on_features(cur_decision, tensor_values)
+                        if on_features:
+                            on_features(tensor_values)
 
                         heuristic = self.read_heuristic(fc)
-                        # TODO is this want we want to do??? Kind of unfair to the
-                        # unroll heuristic if we choose to evaluate using the
-                        # heuristic responses.
-                        # if heuristic > MAX_UNROLL_FACTOR:
-                        #     heuristic = MAX_UNROLL_FACTOR
-                        on_heuristic(cur_decision, heuristic)
+                        if on_heuristic:
+                            on_heuristic(heuristic)
 
                         send(
                             tc,
@@ -405,85 +312,22 @@ class UnrollCompilerHost:
                             advice_spec,
                         )
 
-                        on_action(cur_decision, self.read_action(fc))
+                        action = self.read_action(fc)
+                        if on_action:
+                            on_action(action)
 
-                        send_instrument_response(
-                            tc, get_instrument_response(cur_decision)
-                        )
+                        send_instrument_response(tc, None)
 
-                        cur_decision += 1
                         set_nonblocking(fc)
 
                     set_blocking(fc)
 
             set_blocking(compiler_proc.stdout)
 
-            outs, errs = compiler_proc.communicate()
-            outs = output_module + outs
-            if self.debug:
-                logger.debug("Errs")
-                logger.debug(errs.decode("utf-8"))
-            logger.debug(f"Outs size {len(outs)}")
-            status = compiler_proc.wait()
-            logger.debug(f"Status {status}")
+            status = clean_up_process(compiler_proc)
             if status != 0:
-                return None
-
-            if self.emit_assembly:
-                outs = outs.decode("utf-8")
-                logger.debug("Output module:")
-                logger.debug(outs)
+                exit(status)
 
         finally:
             if compiler_proc is not None:
                 compiler_proc.kill()
-
-
-def DUMP_MODULE(module, ident=""):
-    print(f"DUMPING_MODULE {ident}")
-    dis_command_vector = ["llvm-dis", "-"]
-    with subprocess.Popen(
-        dis_command_vector,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.PIPE,
-    ) as dis_process:
-        output = dis_process.communicate(input=module)[0].decode("utf-8")
-    print(output)
-
-
-def main(args):
-    if args.debug:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
-
-    process_and_args = [
-        "opt",
-        "-O3",
-    ]
-
-    with open(args.module, "rb") as f:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            mod = f.read()
-            uch = UnrollCompilerHost(args.emit_assembly, args.debug)
-            decision_results = uch.get_unroll_decision_results(
-                mod, process_and_args, tmpdir
-            )
-
-            for uds in generate_samples(decision_results, [], dict()):
-                logger.info(f"Obtained sample {uds}")
-
-
-def parse_args_and_run():
-    parser = argparse.ArgumentParser(description="Compiler host")
-    parser.add_argument("--module", required=True)
-    parser.add_argument("--temp-dir", default=None)
-    parser.add_argument("--debug", action="store_true", default=False)
-    parser.add_argument("-S", dest="emit_assembly", action="store_true", default=False)
-    args = parser.parse_args()
-    main(args)
-
-
-if __name__ == "__main__":
-    parse_args_and_run()
