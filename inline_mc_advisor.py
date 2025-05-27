@@ -24,13 +24,10 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             # "-passes=default<O3>,scc-oz-module-inliner",
             "-inliner-interactive-include-default",
             "-interactive-model-runner-echo-reply",
-            # "-debug-only=inline",
+            "-debug-only=inline,inline-ml",
             "-enable-ml-inliner=release",
             f"-inliner-interactive-channel-base={filename}.channel-basename",
         ]
-
-    def wrap_advice(self, advice: bool) -> bool:
-        return advice
 
     def get_rollout_decision(self) -> bool:
         choice = random.random()

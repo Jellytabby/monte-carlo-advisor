@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 D = TypeVar("D")
 
 
+class MonteCarloError(Exception):
+    pass
+
+
 class State(Generic[D]):
     def __init__(
         self,
@@ -96,10 +100,11 @@ class State(Generic[D]):
 
 class MonteCarloAdvisor(ABC, Generic[D]):
     def __init__(self, C: float = sqrt(2)) -> None:
+        self.runner: Any
         self.C = C
         self.root = State[D]()
         self.current = self.root
-        self.runner: Any
+        self.in_rollout: bool = False
 
     def __repr__(self):
         return self.root.repr_subtree()
@@ -118,7 +123,6 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     @abstractmethod
     def get_default_decision(self, tv, heuristic) -> D: ...
 
-    @abstractmethod
     def wrap_advice(self, advice: D) -> Any:
         "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
         return advice
@@ -156,6 +160,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def advice(self, tv, heuristic) -> Any:
         assert self.current
         if self.current.visits == 0:
+            self.in_rollout = True
             decision = self.get_rollout_decision()
         else:
             next = self.get_next_state(self.current)
@@ -207,13 +212,21 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         logger.info(self)
         for i in range(nr_of_turns):
             logger.info(f"Monte Carlo iteration {i}")
-            self.current = self.root
-            score = self.get_score(input_mod, scoring_function)
-            while self.current:
-                self.current.speedup_sum += score
-                self.current.visits += 1
-                self.update_score()
-                self.current = self.current.parent
+            try:
+                self.current = self.root
+                self.in_rollout = False
+                score = self.get_score(input_mod, scoring_function)
+                while self.current:
+                    self.current.speedup_sum += score
+                    self.current.visits += 1
+                    self.update_score()
+                    self.current = self.current.parent
+            except:
+                assert self.current
+                self.current.score = -999
+                self.current.speedup_sum = -999
+                self.current.visits = 1
+
             logger.debug(self)
         logger.info(self)
         logger.info(f"Highest scoring: {self.get_max_leaf_state()}")

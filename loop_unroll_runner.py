@@ -178,7 +178,7 @@ class LoopUnrollCompilerCommunicator:
         """
         on_features: operation on tensor with feature values
         on_heuristic: operation on default decision of compiler
-        on_action: operation on whether given inline decision succeeded
+        on_action: operation on whether given unroll decision succeeded
         """
         to_compiler = temp_rootname + ".in"
         from_compiler = temp_rootname + ".out"
