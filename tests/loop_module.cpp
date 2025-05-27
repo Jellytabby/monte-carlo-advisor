@@ -20,6 +20,7 @@ void loop_sub_sub(int idx_a, int idx_b, int idx_c,
 void run_triplet_loop(int length,
                       int a[], int b[], int c[])
 {
+    length = 200;
   for (int i = 0; i < length; i++) {
     for (int j = 0; j < length; j++) {
       for (int k = 0; k < length; k++) {

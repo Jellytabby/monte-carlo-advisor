@@ -55,7 +55,7 @@ run_baseline: baseline.out
 	./baseline.out
 
 clean:
-	rm -f *.o *.bc *.out
+	rm -f *.o *.bc *.out *.in
 
 run: all
 	./$(OUT)

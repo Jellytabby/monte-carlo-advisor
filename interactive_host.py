@@ -38,8 +38,7 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
         assert False
 
     if isinstance(value, list):
-        to_send = (ctype_func * len(value))(*
-                                            [convert_el_func(el) for el in value])
+        to_send = (ctype_func * len(value))(*[convert_el_func(el) for el in value])
     else:
         to_send = ctype_func(convert_el_func(value))
 
@@ -61,7 +60,9 @@ def clean_up_process(process: subprocess.Popen[bytes]):
 def run_interactive(
     temp_rootname: str,
     make_response: Callable[[List[log_reader.TensorValue]], Union[int, float, list]],
-    process_and_args: list[str], before_advice=None, after_advice=None
+    process_and_args: list[str],
+    before_advice=None,
+    after_advice=None,
 ):
 
     to_compiler = temp_rootname + ".in"
@@ -151,8 +152,7 @@ def run_interactive(
 
                 set_blocking(fc)
 
-                header, tensor_specs, _, advice_spec = log_reader.read_header(
-                    fc)
+                header, tensor_specs, _, advice_spec = log_reader.read_header(fc)
                 context = None
 
                 set_nonblocking(fc)
@@ -178,10 +178,9 @@ def run_interactive(
                         assert event == header
                         continue
 
-                    while (len(fc.peek(1)) <= 0):
+                    while len(fc.peek(1)) <= 0:
                         if compiler_proc.poll() is not None:
-                            logger.warning(
-                                "opt gave context but not observations")
+                            logger.warning("opt gave context but not observations")
                             clean_up_process(compiler_proc)
                             return
 

@@ -6,6 +6,7 @@ from mc_advisor import State, MonteCarloAdvisor
 
 logger = logging.getLogger(__name__)
 
+
 @final
 class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
     def opt_args(self) -> list[str]:

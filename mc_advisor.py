@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 D = TypeVar("D")
 
+
 class State(Generic[D]):
     def __init__(
         self,
@@ -186,7 +187,8 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def run_monte_carlo(self, nr_of_turns: int, input_mod, scoring_function):
         self.get_initial_tree(input_mod)
         logger.info(self)
-        for _ in range(nr_of_turns):
+        for i in range(nr_of_turns):
+            logger.info(f"Monte Carlo iteration {i}")
             self.current = self.root
             score = self.get_score(input_mod, scoring_function)
             while self.current:
