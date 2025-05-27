@@ -20,12 +20,27 @@ def parse_args_and_run():
         prog="Monte Carlo Autotuner",
         description="This python programs tunes compiler passes based on a Monte Carlo tree",
     )
+    advisor_selection = parser.add_mutually_exclusive_group(required=True)
     # parser.add_argument('input_file', type=str, help="Path to input file")
     parser.add_argument(
         "--debug",
         default=False,
         action="store_true",
         help="Set the logging level to debug",
+    )
+    advisor_selection.add_argument(
+        "-ia",
+        "--inline-advisor",
+        default=False,
+        action="store_true",
+        help="Enable the Inline Monte Carlo Advisor",
+    )
+    advisor_selection.add_argument(
+        "-lua",
+        "--loop-unroll-advisor",
+        default=False,
+        action="store_true",
+        help="Enable the Loop Unroll Monte Carlo Advisor",
     )
     parser.add_argument(
         "-r",
@@ -69,8 +84,13 @@ def main(args):
     baseline = get_baseline_runtime(
         args.warmup_runs, args.initial_samples, args.max_samples
     )
-    # advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
-    advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor()
+
+    if args.inline_advisor:
+        advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
+    elif args.loop_unroll_advisor:
+        advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor()
+    else:
+        exit(-1)
     advisor.run_monte_carlo(
         args.number_of_runs,
         m,
