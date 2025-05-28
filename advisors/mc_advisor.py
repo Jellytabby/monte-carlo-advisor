@@ -107,8 +107,10 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.C = C
         self.root = State[D]()
         self.current = self.root
+        self.max_node = self.root
         self.in_rollout: bool = False
         self.default_path: list[D]
+        self.max_speedup_after_n_iterations: list[float] = [1.0]
 
     def __repr__(self):
         return self.root.repr_subtree()
@@ -200,6 +202,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.current.score = (
             self.current.speedup_sum / self.current.visits
         )  # average speedup
+        self.max_node = max(self.current, self.max_node)
+        logger.info(self.max_node.score)
+        self.max_speedup_after_n_iterations.append(self.max_node.score)
 
     def get_max_leaf_state(self) -> State:
         def get_max_leaf_state_helper(current: State | None, max_state: State) -> State:
@@ -232,6 +237,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 self.current.score = -999
                 self.current.speedup_sum = -999
                 self.current.visits = 1
+                self.max_speedup_after_n_iterations.append(
+                    max(self.current.score, self.max_node.score)
+                )
             except KeyboardInterrupt as k:
                 logger.error(k)
                 break

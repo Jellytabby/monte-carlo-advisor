@@ -5,28 +5,25 @@ from advisors.mc_advisor import MonteCarloAdvisor
 
 
 def plot_speedup(advisor: MonteCarloAdvisor):
-    print("HEREEE")
-    max_state = advisor.get_max_leaf_state()
-
-    mc_speedup = []
-    curr = advisor.root
-    for decision in max_state.decisions:
-        curr = curr[decision]
-        mc_speedup.append(curr.score)
-
-    default_speedup = [1.0 for _ in advisor.default_path]
-    x = list(range(1, len(default_speedup) + 1))
+    speedup = advisor.max_speedup_after_n_iterations
+    iterations = list(range(len(speedup)))
+    step = max(1, len(iterations) // 10)
+    ticks = iterations[::step]
 
     plt.figure()
-    plt.plot(x, default_speedup, color="blue", label="Default")
-    plt.plot(x, mc_speedup, color="red", label="Monte Carlo")
+    plt.plot(iterations, speedup)
+    plt.fill_between(iterations, speedup, 1.0, alpha=0.3)
 
-    plt.xlabel("Decisions")
-    plt.ylabel("Speedup")
-    plt.xticks(x)  # show a tick at each decision index
-    plt.title("Speedup per Decision")
-    plt.legend()
+    plt.xlabel("Number of Iterations")
+    plt.ylabel("Max Speedup")
+    plt.ylim(bottom=1.0)
+    plt.title(f"Max Speedup over Iterations ({type(advisor).__name__})")
+    plt.xticks(ticks)  # show one tick per iteration
     plt.tight_layout()
-    plt.savefig(
-        f"/scr/sophia.herrmann/src/monte-carlo-advisor/plots/{type(advisor).__name__}{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = (
+        f"/scr/sophia.herrmann/src/monte-carlo-advisor/"
+        f"plots/{type(advisor).__name__}_{ts}.png"
     )
+    plt.savefig(fname)
