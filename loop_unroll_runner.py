@@ -15,10 +15,8 @@
 
 import os
 import io
-import argparse
 import dataclasses
 import json
-import tempfile
 import subprocess
 import ctypes
 import math
@@ -143,7 +141,7 @@ class LoopUnrollCompilerCommunicator:
         event = json.loads(fc.readline())
         logger.debug("Read" + str(event))
         assert "heuristic" in event
-        heuristic = int.from_bytes(fc.read(8))
+        heuristic = int.from_bytes(fc.read(8), byteorder="little")
         logger.debug(heuristic)
         fc.readline()
         return heuristic
