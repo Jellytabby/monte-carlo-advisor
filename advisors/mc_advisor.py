@@ -4,7 +4,7 @@ from math import log, sqrt
 import tempfile
 from typing import Any, Generic, Optional, TypeVar
 
-import log_reader
+from . import log_reader
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +221,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                     self.current.visits += 1
                     self.update_score()
                     self.current = self.current.parent
-            except:
+            except MonteCarloError:
                 assert self.current
                 self.current.score = -999
                 self.current.speedup_sum = -999

@@ -5,8 +5,8 @@ import random
 import tempfile
 from typing import final
 from typing_extensions import override
-import loop_unroll_runner
-from mc_advisor import MonteCarloAdvisor, State, MonteCarloError
+from . import loop_unroll_runner
+from ..mc_advisor import MonteCarloAdvisor, State, MonteCarloError
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         return [
             "opt",
             "-O3",
+            # "-passes=default<O3>,loop-unroll",
             f"--mlgo-loop-unroll-interactive-channel-base={filename}.channel-basename",
             "--mlgo-loop-unroll-advisor-mode=development",
             "--interactive-model-runner-echo-reply",
@@ -54,9 +55,13 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         return random.randint(1, self.MAX_UNROLL_FACTOR)
 
     def get_default_decision(self, tv, heuristic: int) -> int:
-        return (
-            1 if heuristic == 0 else heuristic
-        )  # compiler returns 0 when no unrolling
+        match heuristic:
+            case 0:  # compiler returns 0 when no unrolling
+                return 1
+            case heuristic if heuristic > self.MAX_UNROLL_FACTOR:
+                return self.MAX_UNROLL_FACTOR
+            case heuristic:
+                return heuristic
 
     def get_next_state(self, state: State[int]) -> State[int]:
         if state.is_leaf():
@@ -85,9 +90,10 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     @override
     def get_score(self, input_mod: bytes, scoring_function):
         filename = type(self).__name__
-        with tempfile.NamedTemporaryFile(
-            suffix=".ll"
-        ) as f1, tempfile.NamedTemporaryFile(suffix=".bc") as f2:
+        with (
+            tempfile.NamedTemporaryFile(suffix=".ll") as f1,
+            tempfile.NamedTemporaryFile(suffix=".bc") as f2,
+        ):
             f1.write(input_mod)
             f1.flush()
 

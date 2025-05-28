@@ -14,7 +14,7 @@ test/CodeGen/MLRegAlloc/interactive-mode.ll
 import ctypes
 import json
 import logging
-import log_reader
+from .. import log_reader
 import io
 import math
 import os

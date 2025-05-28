@@ -22,7 +22,7 @@ import ctypes
 import math
 import logging
 from typing import Any, Callable, Tuple, BinaryIO, Union, List, Optional
-import log_reader
+from .. import log_reader
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,7 @@
 import argparse
 
-from numpy import ndarray
-import inline_mc_advisor
-import loop_unroll_mc_advisor
+from advisors.inline import inline_mc_advisor
+from advisors.loop_unroll import loop_unroll_mc_advisor
 import utils
 import logging
 
@@ -88,7 +87,7 @@ def main(args):
     if args.inline_advisor:
         advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
     elif args.loop_unroll_advisor:
-        advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor()
+        advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(0.5)
     else:
         exit(-1)
     advisor.run_monte_carlo(

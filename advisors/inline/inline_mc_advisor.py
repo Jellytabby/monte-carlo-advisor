@@ -3,8 +3,8 @@ import logging
 from math import sqrt
 import random
 from typing import final
-import inline_runner
-from mc_advisor import State, MonteCarloAdvisor
+from . import inline_runner
+from ..mc_advisor import State, MonteCarloAdvisor
 
 logger = logging.getLogger(__name__)
 
