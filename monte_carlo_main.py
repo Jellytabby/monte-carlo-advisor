@@ -2,6 +2,7 @@ import argparse
 
 from advisors.inline import inline_mc_advisor
 from advisors.loop_unroll import loop_unroll_mc_advisor
+from plots import plot_main
 import utils
 import logging
 
@@ -97,6 +98,7 @@ def main(args):
             x, baseline, args.warmup_runs, args.initial_samples, args.max_samples
         ),
     )
+    plot_main.plot_speedup(advisor)
 
 
 def get_input_module():

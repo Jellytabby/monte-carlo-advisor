@@ -8,7 +8,7 @@ from . import log_reader
 
 logger = logging.getLogger(__name__)
 
-D = TypeVar("D")
+D = TypeVar("D", int, bool)
 
 
 class MonteCarloError(Exception):
@@ -38,6 +38,9 @@ class State(Generic[D]):
             f"score={self.score:.7f},"
             f"visits={self.visits})"
         )
+
+    def __getitem__(self, index: D):
+        return next(c for c in self.children if c.decisions[-1] == index)
 
     def repr_subtree(self):
         """
@@ -105,6 +108,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.root = State[D]()
         self.current = self.root
         self.in_rollout: bool = False
+        self.default_path: list[D]
 
     def __repr__(self):
         return self.root.repr_subtree()
@@ -156,6 +160,8 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 build_initial_path,
                 self.opt_args() + ["-o", f2.name, f1.name],
             )
+        assert self.current
+        self.default_path = self.current.decisions
 
     def advice(self, tv, heuristic) -> Any:
         assert self.current
