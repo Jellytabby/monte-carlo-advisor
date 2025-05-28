@@ -226,7 +226,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 self.current.score = -999
                 self.current.speedup_sum = -999
                 self.current.visits = 1
-
+            except KeyboardInterrupt as k:
+                logger.error(k)
+                break
             logger.debug(self)
         logger.info(self)
         logger.info(f"Highest scoring: {self.get_max_leaf_state()}")
