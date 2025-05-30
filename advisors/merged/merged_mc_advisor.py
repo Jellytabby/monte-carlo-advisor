@@ -1,3 +1,6 @@
+from os import stat
+from typing import Any
+
 from typing_extensions import override
 
 from advisors.inline.inline_mc_advisor import InlineMonteCarloAdvisor
@@ -29,28 +32,45 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             "-debug-only=loop-unroll-development-advisor,loop-unroll,inline,inline-ml",
         ]
 
-    def get_next_state(self, state: State[bool | int]) -> State:
-        # if inline:
-        #     return self.inline_advisor.get_next_state(state)
-        # else:
-        return self.loop_unroll_advisor.get_next_state(state)
+    def get_next_state(self, state: State[bool | int], inline: bool = True) -> State:
+        if state.is_leaf():
+            choice = self.get_rollout_decision(inline)
+            return state.add_child(choice)
+        assert (
+            (type(state.children[0].decisions[0]) is bool) == inline
+        )  # if we have an inlining decision, we expect the children to be inline == bool decision states
+        if inline:
+            return self.inline_advisor.get_next_state(state)
+        else:
+            return self.loop_unroll_advisor.get_next_state(state)
 
-    def get_rollout_decision(self) -> bool | int:
-        # if inline:
-        #     return self.inline_advisor.get_rollout_decision()
-        # else:
-        return self.loop_unroll_advisor.get_rollout_decision()
+    def get_rollout_decision(self, inline: bool = True) -> bool | int:
+        if inline:
+            return self.inline_advisor.get_rollout_decision()
+        else:
+            return self.loop_unroll_advisor.get_rollout_decision()
 
     def get_default_decision(self, tv, heuristic) -> bool | int:
-        if tv:
+        if heuristic is None:
             return self.inline_advisor.get_default_decision(tv, heuristic)
         else:
             return self.loop_unroll_advisor.get_default_decision(tv, heuristic)
-    
+
     @override
-    def wrap_advice(self, advice: bool|int) -> bool|list[float]:
+    def advice(self, tv, heuristic) -> Any:
+        assert self.current
+        if self.current.visits == 0:
+            self.in_rollout = True
+            decision = self.get_rollout_decision(heuristic is None)
+        else:
+            next = self.get_next_state(self.current, heuristic is None)
+            self.current = next
+            decision = next.decisions[-1]
+        return self.wrap_advice(decision)
+
+    @override
+    def wrap_advice(self, advice: bool | int) -> bool | list[float]:
         # if inline:
         #     return advice
         # else:
-            return self.loop_unroll_advisor.wrap_advice(advice)
-
+        return self.loop_unroll_advisor.wrap_advice(advice)

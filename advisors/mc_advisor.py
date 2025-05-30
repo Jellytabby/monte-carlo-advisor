@@ -89,7 +89,7 @@ class State(Generic[D]):
             return NotImplemented
         return self.score < other.score
 
-    def add_child(self, choice: D) -> "State":
+    def add_child(self, choice: D) -> "State[D]":
         """Create, link, and return a new child state."""
         child = State(self.decisions[:] + [choice])
         self.children.append(child)

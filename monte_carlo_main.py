@@ -1,10 +1,11 @@
 import argparse
+import logging
 
+import utils
 from advisors.inline import inline_mc_advisor
 from advisors.loop_unroll import loop_unroll_mc_advisor
+from advisors.merged.merged_mc_advisor import MergedMonteCarloAdvisor
 from plots import plot_main
-import utils
-import logging
 
 logger = logging.getLogger(__name__)
 datefmt = "%Y-%m-%d %H:%M:%S"
@@ -20,7 +21,7 @@ def parse_args_and_run():
         prog="Monte Carlo Autotuner",
         description="This python programs tunes compiler passes based on a Monte Carlo tree",
     )
-    advisor_selection = parser.add_mutually_exclusive_group(required=True)
+    advisor_selection = parser.add_argument_group("Advisor Selection")
     # parser.add_argument('input_file', type=str, help="Path to input file")
     parser.add_argument(
         "--debug",
@@ -85,12 +86,15 @@ def main(args):
         args.warmup_runs, args.initial_samples, args.max_samples
     )
 
-    if args.inline_advisor:
-        advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
-    elif args.loop_unroll_advisor:
-        advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(0.5)
-    else:
-        exit(-1)
+    match (args.inline_advisor, args.loop_unroll_advisor):
+        case (True, True):
+            advisor = MergedMonteCarloAdvisor(0.5)
+        case (True, False):
+            advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
+        case (False, True):
+            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(0.5)
+        case _:
+            exit(-1)
     advisor.run_monte_carlo(
         args.number_of_runs,
         m,

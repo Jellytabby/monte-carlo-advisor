@@ -211,9 +211,6 @@ class LoopUnrollCompilerCommunicator:
                 compiler_proc.stdin.close()
                 compiler_proc.stdin = None
 
-                # sleep(15)
-                print("awake again")
-
                 self.communicate_with_proc(
                     compiler_proc, advice, on_features, on_heuristic, on_action
                 )
