@@ -1,7 +1,11 @@
-import matplotlib.pyplot as plt
+import logging
 from datetime import datetime
 
+import matplotlib.pyplot as plt
+
 from advisors.mc_advisor import MonteCarloAdvisor
+
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
 def plot_speedup(advisor: MonteCarloAdvisor):
