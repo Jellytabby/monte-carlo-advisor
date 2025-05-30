@@ -1,12 +1,13 @@
 import logging
-from math import sqrt
 import random
-
 import tempfile
+from math import sqrt
 from typing import final
+
 from typing_extensions import override
+
+from ..mc_advisor import MonteCarloAdvisor, MonteCarloError, State
 from . import loop_unroll_runner
-from ..mc_advisor import MonteCarloAdvisor, State, MonteCarloError
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,9 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     def __init__(self, C: float = sqrt(2)) -> None:
         super().__init__(C)
         self.runner: loop_unroll_runner.LoopUnrollCompilerCommunicator = (
-            loop_unroll_runner.LoopUnrollCompilerCommunicator(False, True)
+            loop_unroll_runner.LoopUnrollCompilerCommunicator(
+                False, True, self.filename
+            )
         )
 
         # These need to be kept in sync with the ones in UnrollModelFeatureMaps.h
@@ -26,12 +29,11 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         self.ADVICE_TENSOR_LEN = 1 + 32 - self.UNROLL_FACTOR_OFFSET
 
     def opt_args(self) -> list[str]:
-        filename = type(self).__name__
         return [
             "opt",
-            "-O3",
-            # "-passes=default<O3>,loop-unroll",
-            f"--mlgo-loop-unroll-interactive-channel-base={filename}.channel-basename",
+            # "-O3",
+            "-passes=default<O3>,loop-unroll",
+            f"--mlgo-loop-unroll-interactive-channel-base={self.filename}.channel-basename",
             "--mlgo-loop-unroll-advisor-mode=development",
             "--interactive-model-runner-echo-reply",
             "-debug-only=loop-unroll-development-advisor,loop-unroll",
@@ -89,7 +91,6 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
 
     @override
     def get_score(self, input_mod: bytes, scoring_function):
-        filename = type(self).__name__
         with (
             tempfile.NamedTemporaryFile(suffix=".ll") as f1,
             tempfile.NamedTemporaryFile(suffix=".bc") as f2,
@@ -98,9 +99,8 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             f1.flush()
 
             self.runner.compile_once(
-                f"{filename}.channel-basename",
-                self.advice,
                 self.opt_args() + ["-o", f2.name, f1.name],
+                self.advice,
                 on_action=self.check_unroll_success,
             )
             optimized_mod = f2.read()

@@ -1,7 +1,7 @@
-from abc import ABC, abstractmethod
 import logging
-from math import log, sqrt
 import tempfile
+from abc import ABC, abstractmethod
+from math import log, sqrt
 from typing import Any, Generic, Optional, TypeVar
 
 from . import log_reader
@@ -111,6 +111,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.in_rollout: bool = False
         self.default_path: list[D]
         self.max_speedup_after_n_iterations: list[float] = [1.0]
+        self.filename = type(self).__name__
 
     def __repr__(self):
         return self.root.repr_subtree()
@@ -124,7 +125,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def get_rollout_decision(self) -> D: ...
 
     @abstractmethod
-    def get_next_state(self, state: State) -> State: ...
+    def get_next_state(self, state: State[D]) -> State: ...
 
     @abstractmethod
     def get_default_decision(self, tv, heuristic) -> D: ...
@@ -158,9 +159,8 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             f1.flush()
 
             self.runner.compile_once(
-                f"{filename}.channel-basename",
-                build_initial_path,
                 self.opt_args() + ["-o", f2.name, f1.name],
+                build_initial_path,
             )
         assert self.current
         self.default_path = self.current.decisions
@@ -203,7 +203,6 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             self.current.speedup_sum / self.current.visits
         )  # average speedup
         self.max_node = max(self.current, self.max_node)
-        logger.info(self.max_node.score)
         self.max_speedup_after_n_iterations.append(self.max_node.score)
 
     def get_max_leaf_state(self) -> State:
