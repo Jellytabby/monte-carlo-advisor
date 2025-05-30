@@ -13,18 +13,21 @@
 # limitations under the License.
 """Module for communicate with compiler for unroll decisions"""
 
-import os
-import io
-import dataclasses
-import json
-import subprocess
 import ctypes
-import math
+import dataclasses
+import io
+import json
 import logging
-from typing import Any, Callable, Tuple, BinaryIO, Union, List, Optional
+import math
+import os
+import subprocess
+import sys
+from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 from advisors.inline.inline_runner import InlineCompilerCommunicator
-from advisors.loop_unroll.loop_unroll_runner import LoopUnrollCompilerCommunicator
+from advisors.loop_unroll.loop_unroll_runner import \
+    LoopUnrollCompilerCommunicator
+
 from .. import log_reader
 
 logger = logging.getLogger(__name__)
@@ -69,7 +72,7 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
 
 def clean_up_process(process: subprocess.Popen[bytes]):
     outs, errs = process.communicate()
-    logger.info(f"\n{selective_mlgo_output(errs.decode('utf-8'))}")
+    # logger.info(f"\n{selective_mlgo_output(errs.decode('utf-8'))}")
     logger.debug(f"Outs size {len(outs)}")
     status = process.wait()
     logger.debug(f"Status {status}")
@@ -111,52 +114,50 @@ class MergedCompilerCommunicator:
         emit_assembly,
         debug,
     ):
-        pass
+        self.debug = debug
 
     def compile_once(
         self,
-        make_response: Callable[
+        process_and_args: list[str],
+        advice: Callable[
             [List[log_reader.TensorValue], int], Union[int, float, list]
         ],
-        process_and_args: list[str],
         on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
         get_instrument_response=lambda _: None,
     ):
         self.process_and_args = process_and_args
-        self.advice = make_response
+        self.advice = advice
         self.on_features = on_features
         self.on_heuristic = on_heuristic
         self.on_action = on_action
 
         compiler_proc = None
         try:
+            print(process_and_args)
             logger.debug(f"Launching compiler {' '.join(process_and_args)}")
             compiler_proc = subprocess.Popen(
                 process_and_args,
-                stderr=subprocess.DEVNULL if not self.debug else subprocess.PIPE,
+                stderr=subprocess.DEVNULL if not self.debug else sys.stderr,
                 stdout=subprocess.PIPE,
                 stdin=subprocess.PIPE,
             )
             logger.debug(f"Sending module")
             # compiler_proc.stdin.write(mod)
 
-            # FIXME is this the proper way to close the pipe? if we don't set it to
+            # FIXME: is this the proper way to close the pipe? if we don't set it to
             # None then the communicate call will try to close it again and raise an
             # error
-            compiler_proc.stdin.close()
-            compiler_proc.stdin = None
 
             output_module = b""
             tensor_specs = None
             advice_spec = None
 
             LoopUnrollCompilerCommunicator(False, True).communicate_with_proc(
-                compiler_proc
+                compiler_proc, advice
             )
 
-            self.communicate_with_proc(compiler_proc)
 
             status = clean_up_process(compiler_proc)
             if status != 0:
@@ -165,123 +166,3 @@ class MergedCompilerCommunicator:
         finally:
             if compiler_proc is not None:
                 compiler_proc.kill()
-
-    def communicate_with_proc(self, compiler_proc: subprocess.Popen[bytes]):
-        def set_nonblocking(pipe):
-            os.set_blocking(pipe.fileno(), False)
-
-        def set_blocking(pipe):
-            os.set_blocking(pipe.fileno(), True)
-
-        logger.debug(f"Opening pipes {self.to_compiler} and {self.from_compiler}")
-
-        try:
-            os.unlink(self.to_compiler)
-        except FileNotFoundError:
-            pass
-        try:
-            os.unlink(self.from_compiler)
-        except FileNotFoundError:
-            pass
-
-        os.mkfifo(self.to_compiler, 0o666)
-        os.mkfifo(self.from_compiler, 0o666)
-
-        set_nonblocking(compiler_proc.stdout)
-
-        logger.debug(f"Starting communication")
-
-        with io.BufferedWriter(io.FileIO(self.to_compiler, "w+b")) as tc:
-            with io.BufferedReader(io.FileIO(self.from_compiler, "r+b")) as fc:
-                # We need to set the reading pipe to nonblocking for the purpose
-                # of peek'ing and checking if it is readable without blocking
-                # and watch for the process diyng as well. We rever to blocking
-                # mode for the actual communication.
-
-                def input_available():
-                    nonlocal output_module
-                    assert compiler_proc.stdout
-                    output = compiler_proc.stdout.read()
-                    if output is not None:
-                        output_module += output
-                    if len(fc.peek(1)) > 0:
-                        return "yes"
-                    if compiler_proc.poll() is not None:
-                        return "dead"
-                    return "no"
-
-                set_nonblocking(fc)
-                while True:
-                    ia = input_available()
-                    if ia == "dead":
-                        return None
-                    elif ia == "yes":
-                        break
-                    elif ia == "no":
-                        continue
-                    else:
-                        assert False
-
-                set_blocking(fc)
-
-                header, tensor_specs, _, advice_spec = log_reader.read_header(fc)
-                context = None
-
-                set_nonblocking(fc)
-                while True:
-                    ia = input_available()
-                    if ia == "dead":
-                        break
-                    elif ia == "yes":
-                        ...
-                    elif ia == "no":
-                        continue
-                    else:
-                        assert False
-
-                    set_blocking(fc)
-
-                    next_event = fc.readline()
-                    if not next_event:
-                        break
-                    (
-                        last_context,
-                        observation_id,
-                        features,
-                        _,
-                    ) = log_reader.read_one_observation(
-                        context, next_event, fc, tensor_specs, None
-                    )
-                    if last_context != context:
-                        logger.debug(f"context: {last_context}")
-                    context = last_context
-                    logger.debug(f"observation: {observation_id}")
-                    tensor_values = []
-                    for fv in features:
-                        # logger.debug(fv.to_numpy())
-                        # logger.debug(log_reader.string_tensor_value(fv))
-                        tensor_values.append(fv)
-
-                    if self.on_features:
-                        self.on_features(tensor_values)
-
-                    heuristic = self.read_heuristic(fc)
-                    if self.on_heuristic:
-                        self.on_heuristic(heuristic)
-
-                    send(
-                        tc,
-                        self.advice(tensor_values, heuristic),
-                        advice_spec,
-                    )
-
-                    action = self.read_action(fc)
-                    if self.on_action:
-                        self.on_action(action)
-
-                    send_instrument_response(tc, None)
-
-                    set_nonblocking(fc)
-
-                set_blocking(fc)
-            set_blocking(compiler_proc.stdout)

@@ -111,7 +111,6 @@ class LoopUnrollCompilerCommunicator:
         self,
         emit_assembly,
         debug,
-        channel_base: str,
     ):
         """
         on_features: operation on tensor with feature values
@@ -129,7 +128,7 @@ class LoopUnrollCompilerCommunicator:
         self.tensor_mode = "numpy"
         # self.tensor_mode = 'TensorValue'
 
-        self.channel_base = channel_base
+        self.channel_base = type(self).__name__
         self.to_compiler = self.channel_base + ".channel-basename.in"
         self.from_compiler = self.channel_base + ".channel-basename.out"
 

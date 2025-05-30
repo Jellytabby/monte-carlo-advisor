@@ -182,7 +182,6 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         return state.score + self.C * sqrt(log(parent.visits) / state.visits)
 
     def get_score(self, input_mod: bytes, scoring_function):
-        filename = type(self).__name__
         with tempfile.NamedTemporaryFile(
             suffix=".ll"
         ) as f1, tempfile.NamedTemporaryFile(suffix=".bc") as f2:
@@ -190,9 +189,8 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             f1.flush()
 
             self.runner.compile_once(
-                f"{filename}.channel-basename",
-                self.advice,
                 self.opt_args() + ["-o", f2.name, f1.name],
+                self.advice,
             )
             optimized_mod = f2.read()
             return scoring_function(optimized_mod)

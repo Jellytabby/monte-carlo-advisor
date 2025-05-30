@@ -17,10 +17,9 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     def __init__(self, C: float = sqrt(2)) -> None:
         super().__init__(C)
         self.runner: loop_unroll_runner.LoopUnrollCompilerCommunicator = (
-            loop_unroll_runner.LoopUnrollCompilerCommunicator(
-                False, True, self.filename
-            )
+            loop_unroll_runner.LoopUnrollCompilerCommunicator(False, True)
         )
+        self.filename = self.runner.channel_base
 
         # These need to be kept in sync with the ones in UnrollModelFeatureMaps.h
         self.MAX_UNROLL_FACTOR = 5
@@ -33,7 +32,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             "opt",
             # "-O3",
             "-passes=default<O3>,loop-unroll",
-            f"--mlgo-loop-unroll-interactive-channel-base={self.filename}.channel-basename",
+            f"--mlgo-loop-unroll-interactive-channel-base={self.runner.channel_base}.channel-basename",
             "--mlgo-loop-unroll-advisor-mode=development",
             "--interactive-model-runner-echo-reply",
             "-debug-only=loop-unroll-development-advisor,loop-unroll",
