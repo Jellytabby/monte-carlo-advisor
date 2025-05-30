@@ -1,3 +1,5 @@
+import logging
+import tempfile
 from os import stat
 from typing import Any
 
@@ -6,9 +8,10 @@ from typing_extensions import override
 from advisors.inline.inline_mc_advisor import InlineMonteCarloAdvisor
 from advisors.loop_unroll.loop_unroll_mc_advisor import \
     LoopUnrollMonteCarloAdvisor
-from advisors.mc_advisor import MonteCarloAdvisor, State
+from advisors.mc_advisor import MonteCarloAdvisor, MonteCarloError, State
 from advisors.merged.merged_runner import MergedCompilerCommunicator
 
+logger = logging.getLogger(__name__)
 
 class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
     def __init__(self, C) -> None:
@@ -74,3 +77,5 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         #     return advice
         # else:
         return self.loop_unroll_advisor.wrap_advice(advice)
+
+    

@@ -13,13 +13,12 @@
 # limitations under the License.
 """Module for communicate with compiler for unroll decisions"""
 
+import asyncio
 import ctypes
 import dataclasses
 import io
-import json
 import logging
 import math
-import os
 import subprocess
 import sys
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
@@ -119,9 +118,7 @@ class MergedCompilerCommunicator:
     def compile_once(
         self,
         process_and_args: list[str],
-        advice: Callable[
-            [List[log_reader.TensorValue], int], Union[int, float, list]
-        ],
+        advice: Callable[[List[log_reader.TensorValue], int], Union[int, float, list]],
         on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
@@ -154,10 +151,7 @@ class MergedCompilerCommunicator:
             tensor_specs = None
             advice_spec = None
 
-            LoopUnrollCompilerCommunicator(False, True).communicate_with_proc(
-                compiler_proc, advice
-            )
-
+            asyncio.run(self.spawn_comminicators(compiler_proc, advice))
 
             status = clean_up_process(compiler_proc)
             if status != 0:
@@ -166,3 +160,13 @@ class MergedCompilerCommunicator:
         finally:
             if compiler_proc is not None:
                 compiler_proc.kill()
+
+    async def loop_wrapper(self, compiler_proc, advice):
+        LoopUnrollCompilerCommunicator(False, True).communicate_with_proc(
+            compiler_proc, advice
+        )
+
+    async def spawn_comminicators(self, compiler_proc, advice):
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(self.loop_wrapper(compiler_proc, advice))
+        print("RAAAAA")
