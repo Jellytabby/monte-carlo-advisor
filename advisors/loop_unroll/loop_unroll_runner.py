@@ -62,6 +62,7 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     else:
         to_send = ctype_func(convert_el_func(value))
 
+
     assert f.write(bytes(to_send)) == ctypes.sizeof(spec.element_type) * math.prod(
         spec.shape
     )
@@ -276,7 +277,6 @@ class LoopUnrollCompilerCommunicator:
 
                 set_nonblocking(fc)
                 while True:
-                    # print("first liveness")
                     ia = input_available()
                     # print(ia)
                     if ia == "dead":
@@ -284,10 +284,10 @@ class LoopUnrollCompilerCommunicator:
                     elif ia == "yes":
                         break
                     elif ia == "no":
-                        continue
+                        sleep(0)
                     else:
                         assert False
-
+                #
                 set_blocking(fc)
 
                 header, tensor_specs, _, advice_spec = log_reader.read_header(fc)
@@ -295,19 +295,18 @@ class LoopUnrollCompilerCommunicator:
 
                 set_nonblocking(fc)
                 while True:
-                    # print("second liveness")
                     ia = input_available()
                     if ia == "dead":
                         break
                     elif ia == "yes":
                         ...
                     elif ia == "no":
+                        sleep(0)
                         continue
                     else:
                         assert False
 
                     set_blocking(fc)
-
                     next_event = fc.readline()
                     if not next_event:
                         break
@@ -342,14 +341,14 @@ class LoopUnrollCompilerCommunicator:
                         advice_spec,
                     )
 
-                    set_nonblocking(fc)
-                    while len(fc.peek(1)) <= 0:
-                        # print("peeking")
-                        # print(compiler_proc.poll())
-                        if compiler_proc.poll() is not None:
-                            logger.warning("opt gave context but not observations")
-                            clean_up_process(compiler_proc)
-                            return
+                    # set_nonblocking(fc)
+                    # while len(fc.peek(1)) <= 0:
+                    #     # print("peeking")
+                    #     # print(compiler_proc.poll())
+                    #     if compiler_proc.poll() is not None:
+                    #         logger.warning("opt gave context but not observations")
+                    #         clean_up_process(compiler_proc)
+                    #         return
 
                     action = self.read_action(fc)
                     if on_action:
@@ -360,4 +359,3 @@ class LoopUnrollCompilerCommunicator:
                     set_nonblocking(fc)
 
                 set_blocking(fc)
-            set_blocking(compiler_proc.stdout)

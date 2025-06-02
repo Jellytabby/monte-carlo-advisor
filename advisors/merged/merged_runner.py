@@ -21,6 +21,7 @@ import logging
 import math
 import subprocess
 import sys
+import threading
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 from advisors.inline.inline_runner import InlineCompilerCommunicator
@@ -132,7 +133,6 @@ class MergedCompilerCommunicator:
 
         compiler_proc = None
         try:
-            print(process_and_args)
             logger.debug(f"Launching compiler {' '.join(process_and_args)}")
             compiler_proc = subprocess.Popen(
                 process_and_args,
@@ -151,7 +151,22 @@ class MergedCompilerCommunicator:
             tensor_specs = None
             advice_spec = None
 
-            asyncio.run(self.spawn_comminicators(compiler_proc, advice))
+            inline_comm = InlineCompilerCommunicator()
+            loop_comm = LoopUnrollCompilerCommunicator(False, True)
+
+            t_inline = threading.Thread(
+                target=inline_comm.communicate_with_proc,
+                args=(compiler_proc, advice),
+            )
+            t_loop = threading.Thread(
+                target=loop_comm.communicate_with_proc,
+                args=(compiler_proc, advice),
+            )
+
+            t_inline.start()
+            t_loop.start()
+            t_inline.join()
+            t_loop.join()
 
             status = clean_up_process(compiler_proc)
             if status != 0:
@@ -160,13 +175,3 @@ class MergedCompilerCommunicator:
         finally:
             if compiler_proc is not None:
                 compiler_proc.kill()
-
-    async def loop_wrapper(self, compiler_proc, advice):
-        LoopUnrollCompilerCommunicator(False, True).communicate_with_proc(
-            compiler_proc, advice
-        )
-
-    async def spawn_comminicators(self, compiler_proc, advice):
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(self.loop_wrapper(compiler_proc, advice))
-        print("RAAAAA")

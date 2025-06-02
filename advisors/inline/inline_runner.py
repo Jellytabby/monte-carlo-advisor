@@ -19,6 +19,7 @@ import math
 import os
 import subprocess
 import tempfile
+from time import sleep
 from typing import IO, Callable, List, Union
 
 from .. import log_reader
@@ -165,7 +166,7 @@ class InlineCompilerCommunicator:
                     elif ia == "yes":
                         break
                     elif ia == "no":
-                        continue
+                        sleep(0)
                     else:
                         assert False
 
@@ -182,11 +183,12 @@ class InlineCompilerCommunicator:
                     elif ia == "yes":
                         ...
                     elif ia == "no":
+                        sleep(0)
                         continue
                     else:
                         assert False
 
-                    # set_blocking(fc)
+                    set_blocking(fc)
 
                     next_event = fc.readline()
                     if not next_event:
@@ -195,13 +197,14 @@ class InlineCompilerCommunicator:
                     # when runnning with O3 enabled, we have multiple passes, with multiple headers
                     if "observation" not in event and "context" not in event:
                         assert event == header
+                        sleep(0)
                         continue
 
-                    while len(fc.peek(1)) <= 0:
-                        if compiler_proc.poll() is not None:
-                            logger.warning("opt gave context but not observations")
-                            clean_up_process(compiler_proc)
-                            return
+                    # while len(fc.peek(1)) <= 0:
+                    #     if compiler_proc.poll() is not None:
+                    #         logger.warning("opt gave context but not observations")
+                    #         clean_up_process(compiler_proc)
+                    #         return
 
                     logger.debug(f"Len of readable content {len(fc.peek(1))}")
                     (
@@ -219,15 +222,15 @@ class InlineCompilerCommunicator:
                     tensor_values: list[log_reader.TensorValue] = []
                     for fv in features:
                         # logger.debug(fv.to_numpy())
-                        logger.debug(log_reader.string_tensor_value(fv))
+                        # logger.debug(log_reader.string_tensor_value(fv))
                         tensor_values.append(fv)
                     if before_advice is not None:
                         before_advice(tc, fc)
-                    send(tc, advice(tensor_values, False), advice_spec)
+                    send(tc, advice(tensor_values, None), advice_spec)
                     if after_advice is not None:
                         after_advice(tc, fc)
 
-                    # set_nonblocking(fc)
+                    set_nonblocking(fc)
 
                 set_blocking(fc)
 
