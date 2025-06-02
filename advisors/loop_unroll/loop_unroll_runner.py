@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 from time import sleep
-from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
+from typing import IO, Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 from .. import log_reader
 
@@ -68,11 +68,15 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     f.flush()
 
 
-def clean_up_process(process: subprocess.Popen[bytes]):
-    outs, errs = process.communicate()
-    logger.info(f"\n{selective_mlgo_output(errs.decode('utf-8'))}")
-    logger.debug(f"Outs size {len(outs)}")
+def clean_up_process(process: subprocess.Popen[bytes], error_buffer: IO[bytes]):
+    outs, _ = process.communicate()
     status = process.wait()
+    error_buffer.seek(0)
+    if status != 0:
+        logger.error(error_buffer.read().decode())
+    else: 
+        logger.info(f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}")
+    logger.debug(f"Outs size {len(outs)}")
     logger.debug(f"Status {status}")
     return status
 
@@ -215,14 +219,7 @@ class LoopUnrollCompilerCommunicator:
                     compiler_proc, advice, on_features, on_heuristic, on_action
                 )
 
-                outs, _ = compiler_proc.communicate()
-                logger.debug(f"Outs size {len(outs)}")
-                error_buffer.seek(0)
-                logger.info(
-                    f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}"
-                )
-                status = compiler_proc.wait()
-                logger.debug(f"Status {status}")
+                status = clean_up_process(compiler_proc, error_buffer)
                 if status != 0:
                     exit(status)
 

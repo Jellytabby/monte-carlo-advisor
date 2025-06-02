@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 import logging
-from math import sqrt
 import random
+from math import sqrt
 from typing import final
+
+from ..mc_advisor import MonteCarloAdvisor, State
 from . import inline_runner
-from ..mc_advisor import State, MonteCarloAdvisor
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +16,9 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
     def __init__(self, C: float = sqrt(2)) -> None:
         super().__init__(C)
         self.runner = inline_runner.InlineCompilerCommunicator()
+        self.filename = self.runner.channel_base
 
     def opt_args(self) -> list[str]:
-        filename = type(self).__name__
         return [
             "opt",
             # "-passes=inline",
@@ -26,7 +28,7 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             "-interactive-model-runner-echo-reply",
             "-debug-only=inline,inline-ml",
             "-enable-ml-inliner=release",
-            f"-inliner-interactive-channel-base={filename}.channel-basename",
+            f"-inliner-interactive-channel-base={self.filename}.channel-basename",
         ]
 
     def get_rollout_decision(self) -> bool:
