@@ -153,7 +153,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
 
 
         self.runner.compile_once(
-            self.opt_args() + ["-o", "mod-post-bc", "mod-pre-mc.bc"],
+            self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
             build_initial_path,
         )
         assert self.current

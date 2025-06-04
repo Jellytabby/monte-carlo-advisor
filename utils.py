@@ -76,9 +76,11 @@ def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None, env_va
 def clean_up_process(
     process: subprocess.Popen[bytes], error_buffer: io.BufferedRandom | None = None
 ):
-    if process.poll() != None:
+
+    try: 
+        outs, _ = process.communicate()
+    except ValueError:
         return 0
-    outs, _ = process.communicate()
     status = process.wait()
     if error_buffer:
         error_buffer.seek(0)

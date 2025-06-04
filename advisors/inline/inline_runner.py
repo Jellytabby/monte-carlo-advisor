@@ -182,6 +182,8 @@ class InlineCompilerCommunicator:
                         continue
 
                     while len(fc.peek(1)) <= 0:
+                        if not no_stop_event():
+                            return
                         if compiler_proc.poll() is not None:
                             logger.warning("opt gave context but not observations")
                             utils.clean_up_process(compiler_proc)
