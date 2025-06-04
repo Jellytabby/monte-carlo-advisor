@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 
 import utils
 from advisors.inline import inline_mc_advisor
@@ -126,7 +127,9 @@ def get_baseline_runtime(warmup_runs: int, initial_samples: int, max_samples: in
 def runtime_generator(cmd: list[str]):
     logger.debug(cmd)
     while True:
-        outs = utils.get_cmd_output(cmd)
+        outs = utils.get_cmd_output(
+            cmd, pre_exec_function=lambda: os.sched_setaffinity(0, {17})
+        )
         yield utils.readout_mc_inline_timer(outs.decode())
 
 

@@ -16,11 +16,7 @@ def basename(file: str) -> str:
     return Path(file).stem
 
 
-def get_cmd_output(
-    cmd,
-    stdin=None,
-    timeout=None
-):
+def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None):
     logger.debug(f"Running cmd: {' '.join(cmd)}")
 
     # sns = False if cmd[0] != "clang++" else True
@@ -31,6 +27,7 @@ def get_cmd_output(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         stdin=(subprocess.PIPE if stdin is not None else None),
+        preexec_fn=pre_exec_function,
     ) as proc:
         try:
             outs, errs = proc.communicate(input=stdin, timeout=timeout)
@@ -74,13 +71,14 @@ def get_cmd_output(
         logger.debug(f"Output: {outs.decode()}")
         return outs
 
+
 def clean_up_process(process: subprocess.Popen[bytes], error_buffer: io.BufferedRandom):
     outs, _ = process.communicate()
     status = process.wait()
     error_buffer.seek(0)
     if status != 0:
         logger.error(error_buffer.read().decode())
-    else: 
+    else:
         logger.info(f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}")
     logger.debug(f"Outs size {len(outs)}")
     logger.debug(f"Status {status}")
@@ -125,7 +123,8 @@ def get_benchmarking_mean_ci(samples, confidence):
     relative_ci_width = (2 * margin_error) / sample_mean
     return sample_mean, relative_ci_width
 
-def remove_outliers_tscore(samples , alpha: float = 0.05):
+
+def remove_outliers_tscore(samples, alpha: float = 0.05):
     """
     Remove any sample whose studentized residual |t_i| exceeds
     the two‐sided t_crit (df=n-1) at level alpha, mutating samples.
@@ -135,14 +134,17 @@ def remove_outliers_tscore(samples , alpha: float = 0.05):
         return
 
     mean = samples.mean()
-    std  = samples.std(ddof=1)
+    std = samples.std(ddof=1)
     # studentized residuals
     t_vals = (samples - mean) / std
     # two-sided critical threshold
-    t_crit = stats.t.ppf(1 - alpha/2, df=n-1)
+    t_crit = stats.t.ppf(1 - alpha / 2, df=n - 1)
     keep_mask = np.abs(t_vals) <= t_crit
-    logger.debug(f"Removed {len([x for x in keep_mask if x == False])} outliers from {len(samples)} samples.")
+    logger.debug(
+        f"Removed {len([x for x in keep_mask if x == False])} outliers from {len(samples)} samples."
+    )
     return samples[keep_mask]
+
 
 def adaptive_benchmark(
     iterator,
@@ -171,11 +173,11 @@ def adaptive_benchmark(
     assert max_initial_samples < max_samples
 
     logger.debug("Starting adaptive benchmarking")
-    
+
     samples = np.array([], dtype=float)
     n = 0
 
-    if warmup_runs>0:
+    if warmup_runs > 0:
         logger.debug("Starting warmup runs")
         for _ in range(warmup_runs):
             next(iterator)
@@ -188,53 +190,56 @@ def adaptive_benchmark(
                 logger.debug("Got zero")
                 return get_zero_rt_abr()
             logger.debug(
-                f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
+                f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}"
+            )
         n += 1
 
     if len(samples) < initial_samples:
         logger.error("Too many replay failures")
-        sample_mean, relative_ci_width = get_benchmarking_mean_ci(
-            samples, confidence)
-        return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, False)
+        sample_mean, relative_ci_width = get_benchmarking_mean_ci(samples, confidence)
+        return AdaptiveBenchmarkingResult(
+            samples, sample_mean, relative_ci_width, False
+        )
 
     assert n < max_samples
-
 
     samples = remove_outliers_tscore(samples)
     sample_mean = 0.0
     relative_ci_width = 0.0
     while n < max_samples:
-        sample_mean, relative_ci_width = get_benchmarking_mean_ci(
-            samples, confidence)
+        sample_mean, relative_ci_width = get_benchmarking_mean_ci(samples, confidence)
 
         if relative_ci_width < relative_ci_threshold:
-            logger.debug(
-                f"Converged: mean {sample_mean}, ci {relative_ci_width}")
-            return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, True)
+            logger.debug(f"Converged: mean {sample_mean}, ci {relative_ci_width}")
+            return AdaptiveBenchmarkingResult(
+                samples, sample_mean, relative_ci_width, True
+            )
 
         new_sample = None
         while new_sample is None and n < max_samples:
             new_sample = next(iterator)
             logger.debug(
-                f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}")
+                f"Obtained sample {new_sample}, len {len(samples)}, iteration {n}"
+            )
             n += 1
         if new_sample is not None:
 
             samples = np.append(samples, float(new_sample))
 
-    logger.error(
-        f"Did not converge: mean {sample_mean}, ci {relative_ci_width}")
+    logger.error(f"Did not converge: mean {sample_mean}, ci {relative_ci_width}")
 
     if fail_on_non_convergence:
         return get_invalid_abr()
     else:
-        return AdaptiveBenchmarkingResult(samples, sample_mean, relative_ci_width, False)
+        return AdaptiveBenchmarkingResult(
+            samples, sample_mean, relative_ci_width, False
+        )
 
 
 def get_speedup_factor(base: np.ndarray, opt: np.ndarray):
     # This will get element wise speedup factors for all inputs where both succeeded
-    base = base[:len(opt)]
-    opt = opt[:len(base)]
+    base = base[: len(opt)]
+    opt = opt[: len(base)]
 
     arr = base / opt
     arr = arr[~np.isnan(arr)]  # remove NaNs
