@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
     def __init__(self, C: float = sqrt(2)) -> None:
         super().__init__(C)
-        self.runner = inline_runner.InlineCompilerCommunicator()
+        self.runner = inline_runner.InlineCompilerCommunicator(True)
         self.filename = self.runner.channel_base
 
     def opt_args(self) -> list[str]:

@@ -1,12 +1,13 @@
+import io
 import logging
 import re
 import subprocess
-import numpy as np
-
-from datastructures import *
 from pathlib import Path
+
+import numpy as np
 from scipy import stats
 
+from datastructures import *
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,26 @@ def get_cmd_output(
         logger.debug("Finished.")
         logger.debug(f"Output: {outs.decode()}")
         return outs
+
+def clean_up_process(process: subprocess.Popen[bytes], error_buffer: io.BufferedRandom):
+    outs, _ = process.communicate()
+    status = process.wait()
+    error_buffer.seek(0)
+    if status != 0:
+        logger.error(error_buffer.read().decode())
+    else: 
+        logger.info(f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}")
+    logger.debug(f"Outs size {len(outs)}")
+    logger.debug(f"Status {status}")
+    return status
+
+
+def selective_mlgo_output(log: str):
+    lines = log.splitlines(True)
+    lines = [l for l in lines if not l.startswith("unrolling_decision")]
+    lines = [l for l in lines if not "ShouldInstrument" in l]
+    lines = [("\n" + l) if l.startswith("Loop Unroll") else l for l in lines]
+    return "".join(lines)
 
 
 def readout_mc_inline_timer(input: str) -> int | None:

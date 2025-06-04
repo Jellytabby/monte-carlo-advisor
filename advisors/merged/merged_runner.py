@@ -13,18 +13,17 @@
 # limitations under the License.
 """Module for communicate with compiler for unroll decisions"""
 
-import asyncio
 import ctypes
-import dataclasses
 import io
 import logging
 import math
 import subprocess
-import sys
+import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
+import utils
 from advisors.inline.inline_runner import InlineCompilerCommunicator
 from advisors.loop_unroll.loop_unroll_runner import \
     LoopUnrollCompilerCommunicator
@@ -71,43 +70,6 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     f.flush()
 
 
-def clean_up_process(process: subprocess.Popen[bytes]):
-    outs, errs = process.communicate()
-    # logger.info(f"\n{selective_mlgo_output(errs.decode('utf-8'))}")
-    logger.debug(f"Outs size {len(outs)}")
-    status = process.wait()
-    logger.debug(f"Status {status}")
-    return status
-
-
-def selective_mlgo_output(log: str):
-    lines = log.splitlines(True)
-    lines = [l for l in lines if not l.startswith("unrolling_decision")]
-    lines = [l for l in lines if not "ShouldInstrument" in l]
-    lines = [("\n" + l) if l.startswith("Loop Unroll") else l for l in lines]
-    return "".join(lines)
-
-
-@dataclasses.dataclass(frozen=True)
-class UnrollFactorResult:
-    factor: int
-    action: bool
-    module: bytes
-
-
-@dataclasses.dataclass(frozen=True)
-class UnrollDecision:
-    features: List
-    results: List[UnrollFactorResult]
-
-
-@dataclasses.dataclass(frozen=True)
-class CompilationResult:
-    module: bytes
-    features_spec: List
-    advice_spec: List
-    num_decisions: int
-
 
 class MergedCompilerCommunicator:
     def __init__(
@@ -135,61 +97,45 @@ class MergedCompilerCommunicator:
 
         compiler_proc = None
         try:
-            logger.debug(f"Launching compiler {' '.join(process_and_args)}")
-            compiler_proc = subprocess.Popen(
-                process_and_args,
-                stderr=subprocess.DEVNULL if not self.debug else sys.stderr,
-                stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-            )
-            logger.debug(f"Sending module")
-            # compiler_proc.stdin.write(mod)
-
-            # FIXME: is this the proper way to close the pipe? if we don't set it to
-            # None then the communicate call will try to close it again and raise an
-            # error
-
-            output_module = b""
-            tensor_specs = None
-            advice_spec = None
-            inline_comm = InlineCompilerCommunicator(self.stop_event)
-            loop_comm = LoopUnrollCompilerCommunicator(False, True)
-
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                # submit each communicate_with_proc(...) as a separate “future”
-                fut_inline = executor.submit(
-                    inline_comm.communicate_with_proc, compiler_proc, advice
+            with tempfile.TemporaryFile("b+x") as error_buffer:
+                logger.debug(f"Launching compiler {' '.join(process_and_args)}")
+                compiler_proc = subprocess.Popen(
+                    process_and_args,
+                    stderr=subprocess.DEVNULL if not self.debug else error_buffer,
+                    stdout=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
                 )
-                fut_loop = executor.submit(
-                    loop_comm.communicate_with_proc,
-                    compiler_proc,
-                    advice,
-                    None,
-                    None,
-                    self.on_action,
-                )
+                logger.debug(f"Sending module")
 
-                # 3) Wait for them, catching exceptions as soon as either raises
-                for fut in as_completed([fut_inline, fut_loop]):
-                    try:
-                        # fut.result() will re‐raise any exception that occurred in the thread
-                        fut.result()
-                    except Exception as e:
-                        print(fut)
-                        # if one fails, you can cancel the other
-                        if fut is fut_inline and not fut_loop.done():
-                            fut_loop
-                        if fut is fut_loop and not fut_inline.done():
-                            executor.shutdown()
+                # FIXME: is this the proper way to close the pipe? if we don't set it to
+                # None then the communicate call will try to close it again and raise an
+                # error
 
-                        print("after cancelling")
-                        # re‐raise or handle however you prefer
-                        raise e
-            status = clean_up_process(
-                compiler_proc,
-            )
-            if status != 0:
-                exit(status)
+                inline_comm = InlineCompilerCommunicator(True, self.stop_event)
+                loop_comm = LoopUnrollCompilerCommunicator(False, True)
+
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    fut_inline = executor.submit(
+                        inline_comm.communicate_with_proc, compiler_proc, advice
+                    )
+                    fut_loop = executor.submit(
+                        loop_comm.communicate_with_proc,
+                        compiler_proc,
+                        advice,
+                        None,
+                        None,
+                        self.on_action,
+                    )
+
+                    for fut in as_completed([fut_inline, fut_loop]):
+                        try:
+                            fut.result()
+                        except Exception as e:
+                            raise e
+
+                status = utils.clean_up_process(compiler_proc, error_buffer)
+                if status != 0:
+                    exit(status)
 
         finally:
             if compiler_proc is not None:

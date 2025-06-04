@@ -26,6 +26,8 @@ import tempfile
 from time import sleep
 from typing import IO, Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
+import utils
+
 from .. import log_reader
 
 logger = logging.getLogger(__name__)
@@ -67,27 +69,6 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
         spec.shape
     )
     f.flush()
-
-
-def clean_up_process(process: subprocess.Popen[bytes], error_buffer: IO[bytes]):
-    outs, _ = process.communicate()
-    status = process.wait()
-    error_buffer.seek(0)
-    if status != 0:
-        logger.error(error_buffer.read().decode())
-    else: 
-        logger.info(f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}")
-    logger.debug(f"Outs size {len(outs)}")
-    logger.debug(f"Status {status}")
-    return status
-
-
-def selective_mlgo_output(log: str):
-    lines = log.splitlines(True)
-    lines = [l for l in lines if not l.startswith("unrolling_decision")]
-    lines = [l for l in lines if not "ShouldInstrument" in l]
-    lines = [("\n" + l) if l.startswith("Loop Unroll") else l for l in lines]
-    return "".join(lines)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -202,8 +183,7 @@ class LoopUnrollCompilerCommunicator:
                 logger.debug(f"Launching compiler {' '.join(process_and_args)}")
                 compiler_proc = subprocess.Popen(
                     process_and_args,
-                    # stderr=subprocess.DEVNULL if not self.debug else subprocess.PIPE,
-                    stderr=error_buffer,
+                    stderr=subprocess.DEVNULL if not self.debug else error_buffer,
                     stdout=subprocess.PIPE,
                     stdin=subprocess.PIPE,
                 )
@@ -220,7 +200,7 @@ class LoopUnrollCompilerCommunicator:
                     compiler_proc, advice, on_features, on_heuristic, on_action
                 )
 
-                status = clean_up_process(compiler_proc, error_buffer)
+                status = utils.clean_up_process(compiler_proc, error_buffer)
                 if status != 0:
                     exit(status)
 

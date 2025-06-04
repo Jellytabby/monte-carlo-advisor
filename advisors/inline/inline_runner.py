@@ -23,6 +23,8 @@ from threading import Event
 from time import sleep
 from typing import IO, Callable, List, Union
 
+import utils
+
 from .. import log_reader
 
 logger = logging.getLogger(__name__)
@@ -52,25 +54,13 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     f.flush()
 
 
-def clean_up_process(process: subprocess.Popen[bytes], error_buffer: IO[bytes]):
-    outs, _ = process.communicate()
-    status = process.wait()
-    error_buffer.seek(0)
-    if status != 0:
-        logger.error(error_buffer.read().decode())
-    else:
-        logger.info(f"\n{error_buffer.read().decode('utf-8')}")
-    logger.debug(f"Outs size {len(outs)}")
-    logger.debug(f"Status {status}")
-    return status
-
-
 class InlineCompilerCommunicator:
-    def __init__(self, event = None):
+    def __init__(self, debug, event=None):
         self.channel_base = type(self).__name__
         self.to_compiler = self.channel_base + ".channel-basename.in"
         self.from_compiler = self.channel_base + ".channel-basename.out"
-        self.event:Event|None = event
+        self.debug: bool = debug
+        self.event: Event | None = event
 
     def compile_once(
         self,
@@ -86,23 +76,16 @@ class InlineCompilerCommunicator:
                 logger.debug(f"Launching compiler {' '.join(process_and_args)}")
                 compiler_proc = subprocess.Popen(
                     process_and_args,
-                    stderr=error_buffer,
+                    stderr=subprocess.DEVNULL if not self.debug else error_buffer,
                     stdout=subprocess.PIPE,
                     # stdin=subprocess.PIPE,
                 )
                 logger.debug("Sending module")
-                # compiler_proc.stdin.write(mod)
-
-                # FIXME is this the proper way to close the pipe? if we don't set it to
-                # None then the communicate call will try to close it again and raise an
-                # error
-                # compiler_proc.stdin.close()
-                # compiler_proc.stdin = None
                 self.communicate_with_proc(
                     compiler_proc, advice, before_advice, after_advice
                 )
 
-                status = clean_up_process(compiler_proc, error_buffer)
+                status = utils.clean_up_process(compiler_proc, error_buffer)
                 if status != 0:
                     exit(status)
 
