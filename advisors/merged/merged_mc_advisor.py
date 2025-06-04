@@ -74,7 +74,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             raise MonteCarloError("unsuccessful unrolling")
 
     @override
-    def get_initial_tree(self, input_mod: bytes):
+    def get_initial_tree(self ):
         def build_initial_path(
             tv: list[log_reader.TensorValue] = [], heuristic=None
         ) -> Any:
@@ -91,17 +91,10 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         self.root.speedup_sum = 1.0
         self.root.visits = 1
 
-        filename = type(self).__name__
-        with tempfile.NamedTemporaryFile(
-            suffix=".ll"
-        ) as f1, tempfile.NamedTemporaryFile(suffix=".bc") as f2:
-            f1.write(input_mod)
-            f1.flush()
-
-            self.runner.compile_once(
-                self.opt_args() + ["-o", f2.name, f1.name],
-                build_initial_path,
-            )
+        self.runner.compile_once(
+            self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
+            build_initial_path,
+        )
         assert self.current
         self.default_path = self.current.decisions
 
@@ -127,18 +120,10 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             return self.loop_unroll_advisor.wrap_advice(advice)
 
     @override
-    def get_score(self, input_mod: bytes, scoring_function):
-        with (
-            tempfile.NamedTemporaryFile(suffix=".ll") as f1,
-            tempfile.NamedTemporaryFile(suffix=".bc") as f2,
-        ):
-            f1.write(input_mod)
-            f1.flush()
-
-            self.runner.compile_once(
-                self.opt_args() + ["-o", f2.name, f1.name],
-                self.advice,
-                on_action=self.check_unroll_success,
-            )
-            optimized_mod = f2.read()
-            return scoring_function(optimized_mod)
+    def get_score(self,scoring_function):
+       self.runner.compile_once(
+           self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
+           self.advice,
+           on_action=self.check_unroll_success,
+       )
+       return scoring_function()

@@ -23,7 +23,7 @@ def parse_args_and_run():
         description="This python programs tunes compiler passes based on a Monte Carlo tree",
     )
     advisor_selection = parser.add_argument_group("Advisor Selection")
-    # parser.add_argument('input_file', type=str, help="Path to input file")
+    parser.add_argument('input_file', type=str, help="Path to input. The script expects two files, <input>_main.[c|cpp] and <input>_kernel.[c|cpp] respectively.")
     parser.add_argument(
         "--debug",
         default=False,
@@ -82,7 +82,8 @@ def main(args):
     else:
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
 
-    m = get_input_module()
+    os.environ["INPUT"] = args.input_file
+    get_input_module()
     baseline = get_baseline_runtime(
         args.warmup_runs, args.initial_samples, args.max_samples
     )
@@ -98,20 +99,17 @@ def main(args):
             exit(-1)
     advisor.run_monte_carlo(
         args.number_of_runs,
-        m,
-        lambda x: get_score(
-            x, baseline, args.warmup_runs, args.initial_samples, args.max_samples
+        lambda: get_score(
+            baseline, args.warmup_runs, args.initial_samples, args.max_samples
         ),
     )
     plot_main.plot_speedup(advisor)
+    del os.environ["INPUT"] #NOTE: makes no difference apparently? 
 
 
 def get_input_module():
     cmd = ["make", "mod-pre-mc.bc"]
     utils.get_cmd_output(cmd)
-    with open("mod-pre-mc.bc", "rb") as f:
-        mod = f.read()
-    return mod
 
 
 def get_baseline_runtime(warmup_runs: int, initial_samples: int, max_samples: int):
@@ -134,14 +132,11 @@ def runtime_generator(cmd: list[str]):
 
 
 def get_score(
-    mod: bytes,
     baseline: utils.AdaptiveBenchmarkingResult,
     warmup_runs: int,
     initial_samples: int,
     max_samples: int,
 ):
-    with open("mod-post-mc.bc", "wb") as f:
-        f.write(mod)
     cmd = ["make", "run"]
     runtimes = utils.adaptive_benchmark(
         runtime_generator(cmd),

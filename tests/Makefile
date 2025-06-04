@@ -1,7 +1,14 @@
-MAIN_SRC    := loop_main.cpp
-MODULE_SRC  := loop_module.cpp
+INPUT        ?= loop
+
+# Source filenames (auto‐derived from INPUT)
+MAIN_SRC    := $(INPUT)_main.cpp
+MODULE_SRC  := $(INPUT)_module.cpp
 PROF_SRC    := inline_profiler.cpp
-OUT         := a.out
+OUT         ?= $(INPUT).out
+
+
+MAIN_OBJ := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(MAIN_SRC)))
+# PROF_OBJ := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(PROF_SRC)))
 
 MAIN_OBJ    := $(MAIN_SRC:.cpp=.o)
 MODULE_PRE_BC   := mod-pre-mc.bc

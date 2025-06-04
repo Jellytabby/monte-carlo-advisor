@@ -134,7 +134,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
         return advice
 
-    def get_initial_tree(self, input_mod: bytes):
+    def get_initial_tree(self):
         def build_initial_path(
             tv: list[log_reader.TensorValue] = [], heuristic=None
         ) -> Any:
@@ -151,17 +151,11 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.root.speedup_sum = 1.0
         self.root.visits = 1
 
-        filename = type(self).__name__
-        with tempfile.NamedTemporaryFile(
-            suffix=".ll"
-        ) as f1, tempfile.NamedTemporaryFile(suffix=".bc") as f2:
-            f1.write(input_mod)
-            f1.flush()
 
-            self.runner.compile_once(
-                self.opt_args() + ["-o", f2.name, f1.name],
-                build_initial_path,
-            )
+        self.runner.compile_once(
+            self.opt_args() + ["-o", "mod-post-bc", "mod-pre-mc.bc"],
+            build_initial_path,
+        )
         assert self.current
         self.default_path = self.current.decisions
 
@@ -181,19 +175,13 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         assert parent and state.visits > 0
         return state.score + self.C * sqrt(log(parent.visits) / state.visits)
 
-    def get_score(self, input_mod: bytes, scoring_function):
-        with tempfile.NamedTemporaryFile(
-            suffix=".ll"
-        ) as f1, tempfile.NamedTemporaryFile(suffix=".bc") as f2:
-            f1.write(input_mod)
-            f1.flush()
+    def get_score(self,scoring_function):
 
             self.runner.compile_once(
-                self.opt_args() + ["-o", f2.name, f1.name],
+                self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
                 self.advice,
             )
-            optimized_mod = f2.read()
-            return scoring_function(optimized_mod)
+            return scoring_function()
 
     def update_score(self):
         assert self.current
@@ -216,15 +204,15 @@ class MonteCarloAdvisor(ABC, Generic[D]):
 
         return get_max_leaf_state_helper(self.root, self.root)
 
-    def run_monte_carlo(self, nr_of_turns: int, input_mod, scoring_function):
-        self.get_initial_tree(input_mod)
+    def run_monte_carlo(self, nr_of_turns: int, scoring_function):
+        self.get_initial_tree()
         logger.info(self)
         for i in range(nr_of_turns):
             logger.info(f"Monte Carlo iteration {i}")
             try:
                 self.current = self.root
                 self.in_rollout = False
-                score = self.get_score(input_mod, scoring_function)
+                score = self.get_score(scoring_function)
                 while self.current:
                     self.current.speedup_sum += score
                     self.current.visits += 1

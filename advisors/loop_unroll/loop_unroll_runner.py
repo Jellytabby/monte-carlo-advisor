@@ -21,10 +21,9 @@ import logging
 import math
 import os
 import subprocess
-import sys
 import tempfile
 from time import sleep
-from typing import IO, Any, BinaryIO, Callable, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 import utils
 

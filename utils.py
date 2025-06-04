@@ -16,7 +16,7 @@ def basename(file: str) -> str:
     return Path(file).stem
 
 
-def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None):
+def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None, env_vars=None):
     logger.debug(f"Running cmd: {' '.join(cmd)}")
 
     # sns = False if cmd[0] != "clang++" else True
@@ -28,6 +28,7 @@ def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None):
         stderr=subprocess.PIPE,
         stdin=(subprocess.PIPE if stdin is not None else None),
         preexec_fn=pre_exec_function,
+        env=env_vars
     ) as proc:
         try:
             outs, errs = proc.communicate(input=stdin, timeout=timeout)
