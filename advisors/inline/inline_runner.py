@@ -84,7 +84,6 @@ class InlineCompilerCommunicator:
                 self.communicate_with_proc(
                     compiler_proc, advice, before_advice, after_advice
                 )
-
                 status = utils.clean_up_process(compiler_proc, error_buffer)
                 if status != 0:
                     exit(status)
@@ -132,10 +131,6 @@ class InlineCompilerCommunicator:
                 # and watch for the process diyng as well. We rever to blocking
                 # mode for the actual communication.
 
-                # while True:
-                # print(compiler_proc.poll()) if compiler_proc is not None else ()
-                # print(fc.readline())
-
                 def input_available():
                     if len(fc.peek(1)) > 0:
                         return "yes"
@@ -177,25 +172,21 @@ class InlineCompilerCommunicator:
                     else:
                         assert False
 
-                    set_blocking(fc)
-
                     next_event = fc.readline()
                     if not next_event:
                         break
                     event = json.loads(next_event)
-                    # when runnning with O3 enabled, we have multiple passes, with multiple headers
                     if "observation" not in event and "context" not in event:
                         assert event == header
                         sleep(0)
                         continue
 
-                    # while len(fc.peek(1)) <= 0:
-                    #     if compiler_proc.poll() is not None:
-                    #         logger.warning("opt gave context but not observations")
-                    #         clean_up_process(compiler_proc)
-                    #         return
+                    while len(fc.peek(1)) <= 0:
+                        if compiler_proc.poll() is not None:
+                            logger.warning("opt gave context but not observations")
+                            utils.clean_up_process(compiler_proc)
+                            return
 
-                    logger.debug(f"Len of readable content {len(fc.peek(1))}")
                     (
                         last_context,
                         observation_id,
@@ -219,20 +210,6 @@ class InlineCompilerCommunicator:
                     if after_advice is not None:
                         after_advice(tc, fc)
 
-                    set_nonblocking(fc)
-
                 set_blocking(fc)
 
         set_blocking(compiler_proc.stdout)
-
-        # if self.emit_assembly:
-        #     outs = outs.decode("utf-8")
-        #     logger.debug("Output module:")
-        #     logger.debug(outs)
-
-        # return CompilationResult(
-        #     module=outs,
-        #     features_spec=tensor_specs,
-        #     advice_spec=advice_spec,
-        #     num_decisions=cur_decision,
-        # )

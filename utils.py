@@ -72,14 +72,21 @@ def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None):
         return outs
 
 
-def clean_up_process(process: subprocess.Popen[bytes], error_buffer: io.BufferedRandom):
+def clean_up_process(
+    process: subprocess.Popen[bytes], error_buffer: io.BufferedRandom | None = None
+):
+    if process.poll() != None:
+        return 0
     outs, _ = process.communicate()
     status = process.wait()
-    error_buffer.seek(0)
-    if status != 0:
-        logger.error(error_buffer.read().decode())
-    else:
-        logger.info(f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}")
+    if error_buffer:
+        error_buffer.seek(0)
+        if status != 0:
+            logger.error(error_buffer.read().decode())
+        else:
+            logger.info(
+                f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}"
+            )
     logger.debug(f"Outs size {len(outs)}")
     logger.debug(f"Status {status}")
     return status
