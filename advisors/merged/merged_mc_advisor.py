@@ -61,6 +61,18 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         else:
             return self.loop_unroll_advisor.get_default_decision(tv, heuristic)
 
+    def check_unroll_success(self, action: bool):
+        if (
+            not action  # we did not unroll
+            and not self.in_rollout  # we dont care about rollouts
+            and self.current  # get typechecker to shush
+            and self.current.decisions[-1] != 1  # we did want to unroll
+        ):
+
+            self.runner.stop_event.set()
+            logger.warning("Unsuccessful unrolling")
+            raise MonteCarloError("unsuccessful unrolling")
+
     @override
     def get_initial_tree(self, input_mod: bytes):
         def build_initial_path(
@@ -113,3 +125,20 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             return advice
         else:
             return self.loop_unroll_advisor.wrap_advice(advice)
+
+    @override
+    def get_score(self, input_mod: bytes, scoring_function):
+        with (
+            tempfile.NamedTemporaryFile(suffix=".ll") as f1,
+            tempfile.NamedTemporaryFile(suffix=".bc") as f2,
+        ):
+            f1.write(input_mod)
+            f1.flush()
+
+            self.runner.compile_once(
+                self.opt_args() + ["-o", f2.name, f1.name],
+                self.advice,
+                on_action=self.check_unroll_success,
+            )
+            optimized_mod = f2.read()
+            return scoring_function(optimized_mod)

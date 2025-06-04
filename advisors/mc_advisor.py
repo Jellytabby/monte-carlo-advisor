@@ -34,7 +34,7 @@ class State(Generic[D]):
 
     def __repr__(self) -> str:
         return (
-            f"State(decisions={list(map(int,self.decisions))}, "
+            f"State(decisions={self.decisions}, "
             f"score={self.score:.7f},"
             f"visits={self.visits})"
         )
@@ -200,8 +200,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.current.score = (
             self.current.speedup_sum / self.current.visits
         )  # average speedup
-        self.max_node = max(self.current, self.max_node)
-        self.max_speedup_after_n_iterations.append(self.max_node.score)
+        if self.current.is_leaf():
+            self.max_node = max(self.current, self.max_node)
+            self.max_speedup_after_n_iterations.append(self.max_node.score)
 
     def get_max_leaf_state(self) -> State:
         def get_max_leaf_state_helper(current: State | None, max_state: State) -> State:

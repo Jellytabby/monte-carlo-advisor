@@ -19,6 +19,7 @@ import math
 import os
 import subprocess
 import tempfile
+from threading import Event
 from time import sleep
 from typing import IO, Callable, List, Union
 
@@ -65,10 +66,11 @@ def clean_up_process(process: subprocess.Popen[bytes], error_buffer: IO[bytes]):
 
 
 class InlineCompilerCommunicator:
-    def __init__(self):
+    def __init__(self, event = None):
         self.channel_base = type(self).__name__
         self.to_compiler = self.channel_base + ".channel-basename.in"
         self.from_compiler = self.channel_base + ".channel-basename.out"
+        self.event:Event|None = event
 
     def compile_once(
         self,
@@ -158,8 +160,11 @@ class InlineCompilerCommunicator:
                         return "dead"
                     return "no"
 
+                def no_stop_event():
+                    return not (self.event and self.event.is_set())
+
                 set_nonblocking(fc)
-                while True:
+                while no_stop_event():
                     ia = input_available()
                     if ia == "dead":
                         return None
@@ -167,6 +172,7 @@ class InlineCompilerCommunicator:
                         break
                     elif ia == "no":
                         sleep(0)
+                        continue
                     else:
                         assert False
 
@@ -176,7 +182,7 @@ class InlineCompilerCommunicator:
                 context = None
 
                 set_nonblocking(fc)
-                while True:
+                while no_stop_event():
                     ia = input_available()
                     if ia == "dead":
                         break

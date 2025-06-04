@@ -22,6 +22,7 @@ import math
 import subprocess
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 from advisors.inline.inline_runner import InlineCompilerCommunicator
@@ -130,6 +131,7 @@ class MergedCompilerCommunicator:
         self.on_features = on_features
         self.on_heuristic = on_heuristic
         self.on_action = on_action
+        self.stop_event: threading.Event = threading.Event()
 
         compiler_proc = None
         try:
@@ -150,25 +152,42 @@ class MergedCompilerCommunicator:
             output_module = b""
             tensor_specs = None
             advice_spec = None
-
-            inline_comm = InlineCompilerCommunicator()
+            inline_comm = InlineCompilerCommunicator(self.stop_event)
             loop_comm = LoopUnrollCompilerCommunicator(False, True)
 
-            t_inline = threading.Thread(
-                target=inline_comm.communicate_with_proc,
-                args=(compiler_proc, advice),
-            )
-            t_loop = threading.Thread(
-                target=loop_comm.communicate_with_proc,
-                args=(compiler_proc, advice),
-            )
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                # submit each communicate_with_proc(...) as a separate “future”
+                fut_inline = executor.submit(
+                    inline_comm.communicate_with_proc, compiler_proc, advice
+                )
+                fut_loop = executor.submit(
+                    loop_comm.communicate_with_proc,
+                    compiler_proc,
+                    advice,
+                    None,
+                    None,
+                    self.on_action,
+                )
 
-            t_inline.start()
-            t_loop.start()
-            t_inline.join()
-            t_loop.join()
+                # 3) Wait for them, catching exceptions as soon as either raises
+                for fut in as_completed([fut_inline, fut_loop]):
+                    try:
+                        # fut.result() will re‐raise any exception that occurred in the thread
+                        fut.result()
+                    except Exception as e:
+                        print(fut)
+                        # if one fails, you can cancel the other
+                        if fut is fut_inline and not fut_loop.done():
+                            fut_loop
+                        if fut is fut_loop and not fut_inline.done():
+                            executor.shutdown()
 
-            status = clean_up_process(compiler_proc)
+                        print("after cancelling")
+                        # re‐raise or handle however you prefer
+                        raise e
+            status = clean_up_process(
+                compiler_proc,
+            )
             if status != 0:
                 exit(status)
 
