@@ -215,3 +215,6 @@ class InlineCompilerCommunicator:
                 set_blocking(fc)
 
         set_blocking(compiler_proc.stdout)
+        os.unlink(self.to_compiler)
+        os.unlink(self.from_compiler)
+

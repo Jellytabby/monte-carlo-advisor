@@ -134,7 +134,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
         return advice
 
-    def get_initial_tree(self):
+    def get_initial_tree(self, path:str):
         def build_initial_path(
             tv: list[log_reader.TensorValue] = [], heuristic=None
         ) -> Any:
@@ -153,7 +153,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
 
 
         self.runner.compile_once(
-            self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
+            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
             build_initial_path,
         )
         assert self.current
@@ -175,10 +175,10 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         assert parent and state.visits > 0
         return state.score + self.C * sqrt(log(parent.visits) / state.visits)
 
-    def get_score(self,scoring_function):
+    def get_score(self,path:str, scoring_function):
 
             self.runner.compile_once(
-                self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
+                self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
                 self.advice,
             )
             return scoring_function()
@@ -204,15 +204,15 @@ class MonteCarloAdvisor(ABC, Generic[D]):
 
         return get_max_leaf_state_helper(self.root, self.root)
 
-    def run_monte_carlo(self, nr_of_turns: int, scoring_function):
-        self.get_initial_tree()
+    def run_monte_carlo(self, nr_of_turns: int, path:str, scoring_function):
+        self.get_initial_tree(path)
         logger.info(self)
         for i in range(nr_of_turns):
             logger.info(f"Monte Carlo iteration {i}")
             try:
                 self.current = self.root
                 self.in_rollout = False
-                score = self.get_score(scoring_function)
+                score = self.get_score(path, scoring_function)
                 while self.current:
                     self.current.speedup_sum += score
                     self.current.visits += 1

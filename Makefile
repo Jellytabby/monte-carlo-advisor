@@ -1,9 +1,11 @@
 INPUT        ?= loop
+DIR         := $(dir $(INPUT))
+BASE        := $(notdir $(INPUT))
 
 # Source filenames (auto‐derived from INPUT)
 MAIN_SRC    := $(INPUT)_main.cpp
 MODULE_SRC  := $(INPUT)_module.cpp
-PROF_SRC    := inline_profiler.cpp
+PROF_SRC    := tests/inline_profiler.cpp
 OUT         ?= $(INPUT).out
 
 
@@ -11,9 +13,9 @@ MAIN_OBJ := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(MAIN_SRC)))
 # PROF_OBJ := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(PROF_SRC)))
 
 MAIN_OBJ    := $(MAIN_SRC:.cpp=.o)
-MODULE_PRE_BC   := mod-pre-mc.bc
-MODULE_POST_BC   := mod-post-mc.bc
-MODULE_OBJ  := mod-post-mc.o
+MODULE_PRE_BC   := $(DIR)mod-pre-mc.bc
+MODULE_POST_BC   := $(DIR)mod-post-mc.bc
+MODULE_OBJ  := $(DIR)mod-post-mc.o
 PROF_OBJ    := $(PROF_SRC:.cpp=.o)
 
 # $@ -- the target name of the current rule
@@ -36,6 +38,8 @@ $(MAIN_OBJ): $(MAIN_SRC)
 $(PROF_OBJ): $(PROF_SRC)
 	clang++ -O3 -c $< -o $@
 
+mod-pre-mc.bc: $(MODULE_PRE_BC)
+
 # emit LLVM bitcode from your loop source
 $(MODULE_PRE_BC): $(MODULE_SRC)
 	clang++ -O3 -Xclang -disable-llvm-passes -emit-llvm \
@@ -55,14 +59,14 @@ $(MODULE_POST_BC): $(MODULE_PRE_BC)
 $(MODULE_OBJ): $(MODULE_POST_BC)
 	llc -O3 -filetype=obj $< -o $@
 
-baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC)
+$(DIR)baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC)
 	clang++ -O3 $^ -o $@
 
-run_baseline: baseline.out
-	./baseline.out
+run_baseline: $(DIR)baseline.out
+	$(DIR)baseline.out
 
 clean:
-	rm -f *.o *.bc *.out *.in
+	rm -f $(DIR)*.o $(DIR)*.bc $(DIR)*.out $(DIR)*.in
 
 run: all
 	./$(OUT)

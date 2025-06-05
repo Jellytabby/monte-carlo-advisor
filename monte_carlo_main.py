@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import sys
 
 import utils
 from advisors.inline import inline_mc_advisor
@@ -83,6 +84,7 @@ def main(args):
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
 
     os.environ["INPUT"] = args.input_file
+    make_clean()
     get_input_module()
     baseline = get_baseline_runtime(
         args.warmup_runs, args.initial_samples, args.max_samples
@@ -99,12 +101,17 @@ def main(args):
             exit(-1)
     advisor.run_monte_carlo(
         args.number_of_runs,
+        os.path.dirname(args.input_file)+ "/",
         lambda: get_score(
             baseline, args.warmup_runs, args.initial_samples, args.max_samples
         ),
     )
     plot_main.plot_speedup(advisor)
     del os.environ["INPUT"] #NOTE: makes no difference apparently? 
+
+def make_clean():
+    cmd = ["make", "clean"]
+    utils.get_cmd_output(cmd)
 
 
 def get_input_module():

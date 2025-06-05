@@ -74,7 +74,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             raise MonteCarloError("unsuccessful unrolling")
 
     @override
-    def get_initial_tree(self ):
+    def get_initial_tree(self, path: str):
         def build_initial_path(
             tv: list[log_reader.TensorValue] = [], heuristic=None
         ) -> Any:
@@ -92,7 +92,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         self.root.visits = 1
 
         self.runner.compile_once(
-            self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
+            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
             build_initial_path,
         )
         assert self.current
@@ -120,10 +120,10 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             return self.loop_unroll_advisor.wrap_advice(advice)
 
     @override
-    def get_score(self,scoring_function):
-       self.runner.compile_once(
-           self.opt_args() + ["-o", "mod-post-mc.bc", "mod-pre-mc.bc"],
-           self.advice,
-           on_action=self.check_unroll_success,
-       )
-       return scoring_function()
+    def get_score(self, path: str, scoring_function):
+        self.runner.compile_once(
+            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
+            self.advice,
+            on_action=self.check_unroll_success,
+        )
+        return scoring_function()

@@ -338,3 +338,5 @@ class LoopUnrollCompilerCommunicator:
                     set_nonblocking(fc)
 
                 set_blocking(fc)
+            os.unlink(self.to_compiler)
+            os.unlink(self.from_compiler)
