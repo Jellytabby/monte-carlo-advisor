@@ -1,5 +1,6 @@
 import io
 import logging
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -105,65 +106,61 @@ def selective_mlgo_output(log: str):
     return "".join(lines)
 
 
-def readout_mc_inline_timer(input: str) -> int | None:
+def readout_mc_inline_timer(input: str) -> int:
     re_match = re.search("MC_TIMER ([0-9]+)", input)
     if re_match is None:
-        return None
+        raise Exception(
+            "No measurement found. Are you calling __mc_profiling_begin() in your code?"
+        )
     else:
         f = int(re_match.group(1))
         return f
 
 
-def get_benchmarking_mean_ci(samples, confidence):
+def get_benchmarking_median_ci(samples, confidence=0.95) -> tuple[float, float]:
+    """
+    Compute a nonparametric (distribution-free) confidence interval for the median.
+    Returns a tuple: (median, lower_bound, upper_bound).
+
+    Parameters
+    ----------
+    data : array-like of numeric
+        The sample of measurements.
+    p : float, optional
+        Desired confidence level (default 0.95).
+    """
     if len(samples) == 0:
         return np.nan, np.inf
     if len(samples) == 1:
         return samples[0], np.inf
 
-    sample_mean = np.mean(samples)
-    sample_std = np.std(samples, ddof=1)  # sample std (unbiased)
-    if sample_mean == 0:
-        assert sample_std == 0
-        return 0.0, 0.0
+    samples = np.sort(np.asarray(samples))
+    n = samples.size
+    z = stats.norm.ppf((1 + confidence) / 2)
 
-    # t critical value
-    n = len(samples)
-    alpha = 1 - confidence
-    t_crit = stats.t.ppf(1 - alpha / 2, df=n - 1)
+    # compute 1-based ranks
+    lower_rank = math.floor((n - z * math.sqrt(n)) / 2)
+    upper_rank = math.ceil(1 + (n + z * math.sqrt(n)) / 2)
+    # clamp to [1, n]
+    lower_rank = max(lower_rank, 1)
+    upper_rank = min(upper_rank, n)
 
-    margin_error = t_crit * (sample_std / np.sqrt(n))
-    relative_ci_width = (2 * margin_error) / sample_mean
-    return sample_mean, relative_ci_width
+    median = float(np.median(samples))
 
-
-def remove_outliers_tscore(samples, alpha: float = 0.05):
-    """
-    Remove any sample whose studentized residual |t_i| exceeds
-    the two‐sided t_crit (df=n-1) at level alpha, mutating samples.
-    """
-    n = len(samples)
-    if n < 2:
-        return
-
-    mean = samples.mean()
-    std = samples.std(ddof=1)
-    # studentized residuals
-    t_vals = (samples - mean) / std
-    # two-sided critical threshold
-    t_crit = stats.t.ppf(1 - alpha / 2, df=n - 1)
-    keep_mask = np.abs(t_vals) <= t_crit
-    logger.debug(
-        f"Removed {len([x for x in keep_mask if x == False])} outliers from {len(samples)} samples."
-    )
-    return samples[keep_mask]
+    # convert to zero-based indices
+    lower = samples[lower_rank - 1]
+    upper = samples[upper_rank - 1]
+    interval = upper - lower
+    relative_ci_width = interval / median
+    return median, relative_ci_width
 
 
 def adaptive_benchmark(
     iterator,
     warmup_runs,
-    initial_samples=5,
+    initial_samples,
+    max_samples,
     max_initial_samples=20,
-    max_samples=50,
     confidence=0.95,
     relative_ci_threshold=0.05,
     fail_on_non_convergence=False,
@@ -184,7 +181,7 @@ def adaptive_benchmark(
     """
     assert max_initial_samples < max_samples
 
-    logger.debug("Starting adaptive benchmarking")
+    logger.info("Starting adaptive benchmarking")
 
     samples = np.array([], dtype=float)
     n = 0
@@ -208,24 +205,19 @@ def adaptive_benchmark(
 
     if len(samples) < initial_samples:
         logger.error("Too many replay failures")
-        sample_mean, relative_ci_width = get_benchmarking_mean_ci(samples, confidence)
-        return AdaptiveBenchmarkingResult(
-            samples, sample_mean, relative_ci_width, False
-        )
+        median, relative_ci_width = get_benchmarking_median_ci(samples, confidence)
+        return AdaptiveBenchmarkingResult(samples, median, relative_ci_width, False)
 
     assert n < max_samples
 
-    samples = remove_outliers_tscore(samples)
-    sample_mean = 0.0
+    median = 0.0
     relative_ci_width = 0.0
     while n < max_samples:
-        sample_mean, relative_ci_width = get_benchmarking_mean_ci(samples, confidence)
+        median, relative_ci_width = get_benchmarking_median_ci(samples, confidence)
 
         if relative_ci_width < relative_ci_threshold:
-            logger.debug(f"Converged: mean {sample_mean}, ci {relative_ci_width}")
-            return AdaptiveBenchmarkingResult(
-                samples, sample_mean, relative_ci_width, True
-            )
+            logger.debug(f"Converged: median {median}, ci {relative_ci_width}")
+            return AdaptiveBenchmarkingResult(samples, median, relative_ci_width, True)
 
         new_sample = None
         while new_sample is None and n < max_samples:
@@ -238,14 +230,12 @@ def adaptive_benchmark(
 
             samples = np.append(samples, float(new_sample))
 
-    logger.error(f"Did not converge: mean {sample_mean}, ci {relative_ci_width}")
+    logger.error(f"Did not converge: median {median}, ci {relative_ci_width}")
 
     if fail_on_non_convergence:
         return get_invalid_abr()
     else:
-        return AdaptiveBenchmarkingResult(
-            samples, sample_mean, relative_ci_width, False
-        )
+        return AdaptiveBenchmarkingResult(samples, median, relative_ci_width, False)
 
 
 def get_speedup_factor(base: np.ndarray, opt: np.ndarray):
