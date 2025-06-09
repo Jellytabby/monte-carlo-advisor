@@ -51,7 +51,7 @@ $(DIR)baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC) $(EXTRA_OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 run_baseline: $(DIR)baseline.out
-	./baseline.out
+	$(DIR)baseline.out
 
 # — Compile main source —
 $(MAIN_OBJ): $(MAIN_SRC)

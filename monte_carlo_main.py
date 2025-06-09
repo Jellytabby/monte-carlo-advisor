@@ -24,7 +24,11 @@ def parse_args_and_run():
         description="This python programs tunes compiler passes based on a Monte Carlo tree",
     )
     advisor_selection = parser.add_argument_group("Advisor Selection")
-    parser.add_argument('input_file', type=str, help="Path to input. The script expects two files, <input>_main.[c|cpp] and <input>_kernel.[c|cpp] respectively.")
+    parser.add_argument(
+        "input_file",
+        type=str,
+        help="Path to input. The script expects two files, <input>_main.[c|cpp] and <input>_kernel.[c|cpp] respectively.",
+    )
     parser.add_argument(
         "--debug",
         default=False,
@@ -110,7 +114,8 @@ def main(args):
         ),
     )
     plot_main.plot_speedup(advisor, input_name)
-    del os.environ["INPUT"] #NOTE: makes no difference apparently? 
+    del os.environ["INPUT"]  # NOTE: makes no difference apparently?
+
 
 def make_clean():
     cmd = ["make", "clean"]

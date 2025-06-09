@@ -9,15 +9,16 @@ from advisors.mc_advisor import MonteCarloAdvisor
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
-def plot_speedup(advisor: MonteCarloAdvisor,  name: str):
+def plot_speedup(advisor: MonteCarloAdvisor, name: str):
     speedup = advisor.max_speedup_after_n_iterations
+    assert speedup[0] == 1.0
     iterations = list(range(len(speedup)))
     step = max(1, len(iterations) // 10)
     ticks = iterations[::step]
 
     plt.figure()
-    plt.plot(iterations, speedup)
-    plt.fill_between(iterations, speedup, 1.0, alpha=0.3)
+    plt.step(iterations, speedup, where="post")
+    plt.fill_between(iterations, speedup, 1.0, alpha=0.3, step="post")
 
     plt.xlabel("Number of Iterations")
     plt.ylabel("Max Speedup")
