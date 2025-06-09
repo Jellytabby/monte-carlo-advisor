@@ -83,7 +83,10 @@ def main(args):
     else:
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
 
-    os.environ["INPUT"] = args.input_file
+    input_file = args.input_file
+    input_dir = os.path.dirname(input_file)
+    input_name = os.path.basename(input_file)
+    os.environ["INPUT"] = input_file
     make_clean()
     get_input_module()
     baseline = get_baseline_runtime(
@@ -101,12 +104,12 @@ def main(args):
             exit(-1)
     advisor.run_monte_carlo(
         args.number_of_runs,
-        os.path.dirname(args.input_file)+ "/",
+        input_dir + "/",
         lambda: get_score(
             baseline, args.warmup_runs, args.initial_samples, args.max_samples
         ),
     )
-    plot_main.plot_speedup(advisor)
+    plot_main.plot_speedup(advisor, input_name)
     del os.environ["INPUT"] #NOTE: makes no difference apparently? 
 
 def make_clean():
