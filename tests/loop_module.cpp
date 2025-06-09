@@ -23,6 +23,7 @@ void run_triplet_loop(int length,
   for (int i = 0; i < length; i++) {
     for (int j = 0; j < length; j++) {
       for (int k = 0; k < length; k++) {
+        c[k] = a[i] * b[j];
         loop_add_mul(i, j, k, a, b, c);
         loop_add_sub(i, j, k, a, b, c);
         loop_sub_sub(i, j, k, a, b, c);

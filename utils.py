@@ -16,7 +16,9 @@ def basename(file: str) -> str:
     return Path(file).stem
 
 
-def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None, env_vars=None):
+def get_cmd_output(
+    cmd, stdin=None, timeout=None, pre_exec_function=None, env_vars=None
+):
     logger.debug(f"Running cmd: {' '.join(cmd)}")
 
     # sns = False if cmd[0] != "clang++" else True
@@ -28,7 +30,7 @@ def get_cmd_output(cmd, stdin=None, timeout=None, pre_exec_function=None, env_va
         stderr=subprocess.PIPE,
         stdin=(subprocess.PIPE if stdin is not None else None),
         preexec_fn=pre_exec_function,
-        env=env_vars
+        env=env_vars,
     ) as proc:
         try:
             outs, errs = proc.communicate(input=stdin, timeout=timeout)
@@ -77,7 +79,7 @@ def clean_up_process(
     process: subprocess.Popen[bytes], error_buffer: io.BufferedRandom | None = None
 ):
 
-    try: 
+    try:
         outs, _ = process.communicate()
     except ValueError:
         return 0
@@ -104,7 +106,7 @@ def selective_mlgo_output(log: str):
 
 
 def readout_mc_inline_timer(input: str) -> int | None:
-    re_match = re.search("MC_INLINE_TIMER ([0-9]+)", input)
+    re_match = re.search("MC_TIMER ([0-9]+)", input)
     if re_match is None:
         return None
     else:

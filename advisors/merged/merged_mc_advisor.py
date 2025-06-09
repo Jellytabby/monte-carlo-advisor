@@ -20,7 +20,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         super().__init__(C)
         self.inline_advisor = InlineMonteCarloAdvisor()
         self.loop_unroll_advisor = LoopUnrollMonteCarloAdvisor()
-        self.runner = MergedCompilerCommunicator(False, True)
+        self.runner = MergedCompilerCommunicator(False, False)
 
     def opt_args(self) -> list[str]:
         return [

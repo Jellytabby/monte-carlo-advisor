@@ -24,22 +24,22 @@ static void __attribute__((destructor)) mc_timer_fini(void) {
         if (f) out = f;
     }
     if (mc_valid) {
-        fprintf(out, "MC_INLINE_TIMER %llu\n",
+        fprintf(out, "MC_TIMER %llu\n",
                 (unsigned long long)mc_duration);
     } else {
-        fprintf(out, "MC_INLINE_TIMER_INVALID\n");
+        fprintf(out, "MC_TIMER_INVALID\n");
     }
     if (out != stdout) fclose(out);
 }
 
 // Exposed hooks (no C++ name‐mangling)
-void __mc_inline_begin(void) {
+void __mc_profiling_begin(void) {
     if (mc_timing) mc_valid = 0;  // nested begin→invalid
     mc_timing = 1;
     clock_gettime(CLOCK_MONOTONIC, &mc_start);
 }
 
-void __mc_inline_end(void) {
+void __mc_profiling_end(void) {
     struct timespec end;
     if (!mc_timing) mc_valid = 0; // unmatched end→invalid
     mc_timing = 0;

@@ -23,9 +23,9 @@ public:
       os = &std::cout;
     }
     if (valid)
-      *os << "MC_INLINE_TIMER " << duration << "\n";
+      *os << "MC_TIMER " << duration << "\n";
     else
-      *os << "MC_INLINE_TIMER_INVALID\n";
+      *os << "MC_TIMER_INVALID\n";
   }
   void begin() {
     if (timing)
@@ -56,5 +56,5 @@ private:
 } timer;
 } // namespace
 
-extern "C" void __mc_inline_begin(void) { timer.begin(); }
-extern "C" void __mc_inline_end(void) { timer.end(); }
+extern "C" void __mc_profiling_begin(void) { timer.begin(); }
+extern "C" void __mc_profiling_end(void) { timer.end(); }

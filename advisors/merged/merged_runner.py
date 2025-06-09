@@ -112,7 +112,7 @@ class MergedCompilerCommunicator:
                 # error
 
                 inline_comm = InlineCompilerCommunicator(True, self.stop_event)
-                loop_comm = LoopUnrollCompilerCommunicator(False, True)
+                loop_comm = LoopUnrollCompilerCommunicator(False, False)
 
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     fut_inline = executor.submit(

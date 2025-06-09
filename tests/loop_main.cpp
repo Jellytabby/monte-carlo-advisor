@@ -2,8 +2,8 @@
 
 void loop_add_mul(int, int, int, int[], int[], int[]);
 void run_triplet_loop(int, int[], int[], int[]);
-extern "C" void __mc_inline_begin(void);
-extern "C" void __mc_inline_end(void);
+extern "C" void __mc_profiling_begin(void);
+extern "C" void __mc_profiling_end(void);
 
 int main() {
   int length = 200;
@@ -18,9 +18,9 @@ int main() {
     b[i] = length - i;
   }
 
-  __mc_inline_begin();
+  __mc_profiling_begin();
   run_triplet_loop(length, a, b, c);
-  __mc_inline_end();
+  __mc_profiling_end();
 
   std::cout << "FINISHED THE LOOP\n";
 
