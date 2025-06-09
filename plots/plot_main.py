@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime
 
 import matplotlib.pyplot as plt
@@ -8,7 +9,7 @@ from advisors.mc_advisor import MonteCarloAdvisor
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
-def plot_speedup(advisor: MonteCarloAdvisor):
+def plot_speedup(advisor: MonteCarloAdvisor,  name: str):
     speedup = advisor.max_speedup_after_n_iterations
     iterations = list(range(len(speedup)))
     step = max(1, len(iterations) // 10)
@@ -21,13 +22,11 @@ def plot_speedup(advisor: MonteCarloAdvisor):
     plt.xlabel("Number of Iterations")
     plt.ylabel("Max Speedup")
     plt.ylim(bottom=1.0)
-    plt.title(f"Max Speedup over Iterations ({type(advisor).__name__})")
+    plt.title(f"Max Speedup over Iterations for {name}")
     plt.xticks(ticks)  # show one tick per iteration
     plt.tight_layout()
 
+    os.makedirs(f"plots/{name}", exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = (
-        f"/scr/sophia.herrmann/src/monte-carlo-advisor/"
-        f"plots/{type(advisor).__name__}_{ts}.png"
-    )
+    fname = f"plots/{name}/{name}_{ts}.png"
     plt.savefig(fname)
