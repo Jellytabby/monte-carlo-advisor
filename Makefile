@@ -27,7 +27,7 @@ MODULE_OBJ    := $(DIR)mod-post-mc.o
 # — Project-specific flags (comment out entire line to disable) —
 INC          := -I/scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/
 EXTRA_OBJS   := /scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/polybench.o
-EXTRA_FLAGS  := -DPOLYBENCH_USE_C99_PROTO
+EXTRA_FLAGS  := -DPOLYBENCH_USE_C99_PROTO -lm
 
 # — Compiler flags —
 CFLAGS       := -O3 $(INC) $(EXTRA_FLAGS)
@@ -44,7 +44,7 @@ all: $(OUT) $(MODULE_POST_BC)
 
 # — Link final executable —
 $(OUT): $(MAIN_OBJ) $(PROF_OBJ) $(MODULE_OBJ) $(EXTRA_OBJS)
-	$(CC) $^ -o $@
+	$(CC) $(EXTRA_FLAGS) $^ -o $@
 
 # — Baseline build & run —
 $(DIR)baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC) $(EXTRA_OBJS)
