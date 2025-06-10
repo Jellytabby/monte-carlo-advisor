@@ -76,6 +76,13 @@ def parse_args_and_run():
         default=100,
         help="Maximum number of runtime samples to take until convergence.",
     )
+    parser.add_argument(
+        "-c",
+        "--core",
+        type=int,
+        required=True,
+        help="Core on which to execute the benchmark runs on.",
+    )
 
     args = parser.parse_args()
     main(args)
@@ -94,23 +101,27 @@ def main(args):
     make_clean()
     get_input_module()
     baseline = get_baseline_runtime(
-        args.warmup_runs, args.initial_samples, args.max_samples
+        args.warmup_runs, args.initial_samples, args.max_samples, args.core
     )
 
     match (args.inline_advisor, args.loop_unroll_advisor):
         case (True, True):
-            advisor = MergedMonteCarloAdvisor(0.5)
+            advisor = MergedMonteCarloAdvisor(input_name)
         case (True, False):
-            advisor = inline_mc_advisor.InlineMonteCarloAdvisor()
+            advisor = inline_mc_advisor.InlineMonteCarloAdvisor(input_name)
         case (False, True):
-            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(0.5)
+            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(input_name)
         case _:
             exit(-1)
     advisor.run_monte_carlo(
         args.number_of_runs,
         input_dir + "/",
         lambda: get_score(
-            baseline, args.warmup_runs, args.initial_samples, args.max_samples
+            baseline,
+            args.warmup_runs,
+            args.initial_samples,
+            args.max_samples,
+            args.core,
         ),
     )
     plot_main.plot_speedup(advisor, input_name)
@@ -127,21 +138,23 @@ def get_input_module():
     utils.get_cmd_output(cmd)
 
 
-def get_baseline_runtime(warmup_runs: int, initial_samples: int, max_samples: int):
+def get_baseline_runtime(
+    warmup_runs: int, initial_samples: int, max_samples: int, core: int
+):
     cmd = ["make", "run_baseline"]
     return utils.adaptive_benchmark(
-        runtime_generator(cmd),
+        runtime_generator(cmd, core),
         warmup_runs=warmup_runs,
         initial_samples=initial_samples,
         max_samples=max_samples,
     )
 
 
-def runtime_generator(cmd: list[str]):
+def runtime_generator(cmd: list[str], core: int):
     logger.debug(cmd)
     while True:
         outs = utils.get_cmd_output(
-            cmd, pre_exec_function=lambda: os.sched_setaffinity(0, {17})
+            cmd, pre_exec_function=lambda: os.sched_setaffinity(0, {core})
         )
         yield utils.readout_mc_inline_timer(outs.decode())
 
@@ -151,10 +164,11 @@ def get_score(
     warmup_runs: int,
     initial_samples: int,
     max_samples: int,
+    core: int,
 ):
     cmd = ["make", "run"]
     runtimes = utils.adaptive_benchmark(
-        runtime_generator(cmd),
+        runtime_generator(cmd, core),
         warmup_runs=warmup_runs,
         initial_samples=initial_samples,
         max_samples=max_samples,

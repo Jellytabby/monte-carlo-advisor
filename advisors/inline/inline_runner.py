@@ -55,8 +55,8 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
 
 
 class InlineCompilerCommunicator:
-    def __init__(self, debug, event=None):
-        self.channel_base = type(self).__name__
+    def __init__(self, input_name: str, debug, event=None):
+        self.channel_base = input_name + type(self).__name__
         self.to_compiler = self.channel_base + ".channel-basename.in"
         self.from_compiler = self.channel_base + ".channel-basename.out"
         self.debug: bool = debug
@@ -217,4 +217,3 @@ class InlineCompilerCommunicator:
         set_blocking(compiler_proc.stdout)
         os.unlink(self.to_compiler)
         os.unlink(self.from_compiler)
-

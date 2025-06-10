@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 @final
 class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
-    def __init__(self, C: float = sqrt(2)) -> None:
-        super().__init__(C)
+    def __init__(self, input_name: str, C: float = sqrt(2)) -> None:
+        super().__init__(input_name, C)
         self.runner: loop_unroll_runner.LoopUnrollCompilerCommunicator = (
-            loop_unroll_runner.LoopUnrollCompilerCommunicator(False, True)
+            loop_unroll_runner.LoopUnrollCompilerCommunicator(input_name, False, True)
         )
         self.filename = self.runner.channel_base
 

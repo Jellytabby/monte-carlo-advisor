@@ -25,8 +25,7 @@ from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 import utils
 from advisors.inline.inline_runner import InlineCompilerCommunicator
-from advisors.loop_unroll.loop_unroll_runner import \
-    LoopUnrollCompilerCommunicator
+from advisors.loop_unroll.loop_unroll_runner import LoopUnrollCompilerCommunicator
 
 from .. import log_reader
 
@@ -70,13 +69,14 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     f.flush()
 
 
-
 class MergedCompilerCommunicator:
     def __init__(
         self,
+        input_name: str,
         emit_assembly,
         debug,
     ):
+        self.input_name = input_name
         self.debug = debug
 
     def compile_once(
@@ -111,8 +111,12 @@ class MergedCompilerCommunicator:
                 # None then the communicate call will try to close it again and raise an
                 # error
 
-                inline_comm = InlineCompilerCommunicator(True, self.stop_event)
-                loop_comm = LoopUnrollCompilerCommunicator(False, False)
+                inline_comm = InlineCompilerCommunicator(
+                    self.input_name, True, self.stop_event
+                )
+                loop_comm = LoopUnrollCompilerCommunicator(
+                    self.input_name, False, False
+                )
 
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     fut_inline = executor.submit(

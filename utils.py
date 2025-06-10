@@ -85,7 +85,7 @@ def clean_up_process(
     except ValueError:
         return 0
     status = process.wait()
-    if error_buffer:
+    if error_buffer and error_buffer.peek(1):
         error_buffer.seek(0)
         if status != 0:
             logger.error(error_buffer.read().decode())

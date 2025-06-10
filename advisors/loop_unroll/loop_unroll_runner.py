@@ -63,7 +63,6 @@ def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.Tensor
     else:
         to_send = ctype_func(convert_el_func(value))
 
-
     assert f.write(bytes(to_send)) == ctypes.sizeof(spec.element_type) * math.prod(
         spec.shape
     )
@@ -94,6 +93,7 @@ class CompilationResult:
 class LoopUnrollCompilerCommunicator:
     def __init__(
         self,
+        input_name: str,
         emit_assembly,
         debug,
     ):
@@ -113,7 +113,7 @@ class LoopUnrollCompilerCommunicator:
         self.tensor_mode = "numpy"
         # self.tensor_mode = 'TensorValue'
 
-        self.channel_base = type(self).__name__
+        self.channel_base = input_name + type(self).__name__
         self.to_compiler = self.channel_base + ".channel-basename.in"
         self.from_compiler = self.channel_base + ".channel-basename.out"
 

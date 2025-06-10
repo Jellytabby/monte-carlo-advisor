@@ -109,7 +109,11 @@ class State(Generic[D]):
 
 
 class MonteCarloAdvisor(ABC, Generic[D]):
-    def __init__(self, C: float = sqrt(2)) -> None:
+    def __init__(
+        self,
+        input_name: str,
+        C: float = sqrt(2),
+    ) -> None:
         self.runner: Any
         self.C = C
         self.root = State[D]()
@@ -118,7 +122,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.in_rollout: bool = False
         self.default_path: list[D]
         self.max_speedup_after_n_iterations: list[float] = [1.0]
-        self.filename = type(self).__name__
+        self.filename = input_name
 
     def __repr__(self):
         return self.root.repr_subtree()
@@ -187,17 +191,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
 
     def update_score(self):
         assert self.current
-        samesies = self.current is self.max_node
-        if samesies:
-            print(f"Max is same as current: {samesies}")
-            print(f"Current max: {self.max_node.score}")
         self.current.score = (
             self.current.speedup_sum / self.current.visits
         )  # average speedup
-        if self.current.is_leaf():
-            self.max_node = max(self.current, self.max_node)
-            self.max_speedup_after_n_iterations.append(self.max_node.score)
-            print(f"After max: {self.max_node.score}")
 
     def get_max_state(self) -> State:
         def get_max_state_helper(current: State | None, max_state: State) -> State:
@@ -228,6 +224,14 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                     self.current.visits += 1
                     self.update_score()
                     self.current = self.current.parent
+                # print(
+                #     f"Before update max: {self.max_node}, is_leaf: {self.max_node.is_leaf()}"
+                # )
+                self.max_node = self.get_max_state()
+                # print(
+                #     f"After update max: {self.max_node}, is_leaf: {self.max_node.is_leaf()}"
+                # )
+                self.max_speedup_after_n_iterations.append(self.max_node.score)
             except MonteCarloError:
                 assert self.current
                 self.current.score = -999
