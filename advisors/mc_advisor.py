@@ -89,9 +89,16 @@ class State(Generic[D]):
             return NotImplemented
         return self.score < other.score
 
-    def add_child(self, choice: D) -> "State[D]":
+    def add_child(
+        self, choice: D, score: float = 0.0, speedup_sum=0.0, visits: int = 0
+    ) -> "State[D]":
         """Create, link, and return a new child state."""
-        child = State(self.decisions[:] + [choice])
+        child = State(
+            self.decisions[:] + [choice],
+            score=score,
+            speedup_sum=speedup_sum,
+            visits=visits,
+        )
         self.children.append(child)
         self.children.sort(key=lambda c: c.decisions[-1])
         child.parent = self
@@ -134,23 +141,19 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
         return advice
 
-    def get_initial_tree(self, path:str):
+    def get_initial_tree(self, path: str):
         def build_initial_path(
             tv: list[log_reader.TensorValue] = [], heuristic=None
         ) -> Any:
             assert self.current
             default_decision = self.get_default_decision(tv, heuristic)
-            child = self.current.add_child(default_decision)
-            child.score = 1.0
-            child.speedup_sum = 1.0
-            child.visits = 1
+            child = self.current.add_child(default_decision, 1.0, 1.0, 1)
             self.current = child
             return self.wrap_advice(default_decision)
 
         self.root.score = 1.0
         self.root.speedup_sum = 1.0
         self.root.visits = 1
-
 
         self.runner.compile_once(
             self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
@@ -175,38 +178,45 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         assert parent and state.visits > 0
         return state.score + self.C * sqrt(log(parent.visits) / state.visits)
 
-    def get_score(self,path:str, scoring_function):
-
-            self.runner.compile_once(
-                self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
-                self.advice,
-            )
-            return scoring_function()
+    def get_score(self, path: str, scoring_function):
+        self.runner.compile_once(
+            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
+            self.advice,
+        )
+        return scoring_function()
 
     def update_score(self):
         assert self.current
+        samesies = self.current is self.max_node
+        if samesies:
+            print(f"Max is same as current: {samesies}")
+            print(f"Current max: {self.max_node.score}")
         self.current.score = (
             self.current.speedup_sum / self.current.visits
         )  # average speedup
         if self.current.is_leaf():
             self.max_node = max(self.current, self.max_node)
             self.max_speedup_after_n_iterations.append(self.max_node.score)
+            print(f"After max: {self.max_node.score}")
 
-    def get_max_leaf_state(self) -> State:
-        def get_max_leaf_state_helper(current: State | None, max_state: State) -> State:
+    def get_max_state(self) -> State:
+        def get_max_state_helper(current: State | None, max_state: State) -> State:
             if current is None:
                 return max_state
             if current.is_leaf():
                 return max(current, max_state)
+
+            max_state = max(current, max_state)
             return max(
-                map(lambda s: get_max_leaf_state_helper(s, max_state), current.children)
+                map(lambda s: get_max_state_helper(s, max_state), current.children)
             )
 
-        return get_max_leaf_state_helper(self.root, self.root)
+        return get_max_state_helper(self.root, self.root)
 
-    def run_monte_carlo(self, nr_of_turns: int, path:str, scoring_function):
+    def run_monte_carlo(self, nr_of_turns: int, path: str, scoring_function):
         self.get_initial_tree(path)
         logger.info(self)
+        logger.info(f"Current Max {self.max_node.score}")
         for i in range(nr_of_turns):
             logger.info(f"Monte Carlo iteration {i}")
             try:
@@ -231,4 +241,4 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 break
             logger.debug(self)
         logger.info(self)
-        logger.info(f"Highest scoring: {self.get_max_leaf_state()}")
+        logger.info(f"Highest scoring: {self.get_max_state()}")
