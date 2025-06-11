@@ -108,6 +108,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             next = self.get_next_state(self.current, heuristic is None)
             self.current = next
             decision = next.decisions[-1]
+        self.current_path.append(decision)
         return self.wrap_advice(decision, heuristic is None)
 
     @override

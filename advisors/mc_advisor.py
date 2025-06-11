@@ -118,9 +118,10 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.C = C
         self.root = State[D]()
         self.current = self.root
-        self.max_node = self.root
         self.in_rollout: bool = False
         self.default_path: list[D]
+        self.current_path: list[D] = []
+        self.all_runs: list[tuple[list[D], float]] = []
         self.max_speedup_after_n_iterations: list[float] = [1.0]
         self.filename = input_name
 
@@ -165,6 +166,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         )
         assert self.current
         self.default_path = self.current.decisions
+        self.all_runs.append((self.default_path[:], 1.0))
 
     def advice(self, tv, heuristic) -> Any:
         assert self.current
@@ -175,6 +177,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             next = self.get_next_state(self.current)
             self.current = next
             decision = next.decisions[-1]
+        self.current_path.append(decision)
         return self.wrap_advice(decision)
 
     def uct(self, state: State) -> float:
@@ -209,14 +212,18 @@ class MonteCarloAdvisor(ABC, Generic[D]):
 
         return get_max_state_helper(self.root, self.root)
 
+    def get_max_run(self) -> tuple[list[D], float]:
+        return max(self.all_runs, key=lambda x: x[1])
+
     def run_monte_carlo(self, nr_of_turns: int, path: str, scoring_function):
         self.get_initial_tree(path)
         logger.info(self)
-        logger.info(f"Current Max {self.max_node.score}")
+        max_score = 1.0
         for i in range(nr_of_turns):
             logger.info(f"Monte Carlo iteration {i}")
             try:
                 self.current = self.root
+                self.current_path = []
                 self.in_rollout = False
                 score = self.get_score(path, scoring_function)
                 while self.current:
@@ -224,25 +231,19 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                     self.current.visits += 1
                     self.update_score()
                     self.current = self.current.parent
-                # print(
-                #     f"Before update max: {self.max_node}, is_leaf: {self.max_node.is_leaf()}"
-                # )
-                self.max_node = self.get_max_state()
-                # print(
-                #     f"After update max: {self.max_node}, is_leaf: {self.max_node.is_leaf()}"
-                # )
-                self.max_speedup_after_n_iterations.append(self.max_node.score)
+                self.all_runs.append((self.current_path[:], score))
+                max_score = max(max_score, score)
+                self.max_speedup_after_n_iterations.append(max_score)
             except MonteCarloError:
                 assert self.current
                 self.current.score = -999
                 self.current.speedup_sum = -999
                 self.current.visits = 1
-                self.max_speedup_after_n_iterations.append(
-                    max(self.current.score, self.max_node.score)
-                )
+                self.all_runs.append((self.current_path[:], -999))
+                self.max_speedup_after_n_iterations.append(max_score)
             except KeyboardInterrupt as k:
                 logger.error(k)
                 break
             logger.debug(self)
         logger.info(self)
-        logger.info(f"Highest scoring: {self.get_max_state()}")
+        logger.info(f"Highest scoring decisions: {self.get_max_run()}")
