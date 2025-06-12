@@ -13,6 +13,10 @@ from datastructures import *
 logger = logging.getLogger(__name__)
 
 
+class MonteCarloError(Exception):
+    pass
+
+
 def basename(file: str) -> str:
     return Path(file).stem
 
@@ -59,8 +63,19 @@ def get_cmd_output(
         #     logger.debug("Terminated.")
         #     raise InputGenTimeout(f"Timed out: {cmd}")
         except subprocess.TimeoutExpired as e:
-            print(f"Some error {e}")
-            exit(-1)
+            logger.warning("Process timed out! Terminating...")
+            proc.terminate()
+            try:
+                proc.communicate(timeout=1)
+            except subprocess.TimeoutExpired as e:
+                logger.warning("Termination timed out! Killing...")
+                proc.kill()
+                proc.communicate()
+                logger.debug("Killed.")
+                raise e
+
+            logger.debug("Terminated.")
+            raise e
 
         if status != 0:
             logger.error(f"Exit with status {status}")

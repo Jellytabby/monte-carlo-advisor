@@ -166,6 +166,8 @@ def get_score(
     max_samples: int,
     core: int,
 ):
+    cmd = ["make", "module_obj"]
+    utils.get_cmd_output(cmd, timeout=120)
     cmd = ["make", "run"]
     runtimes = utils.adaptive_benchmark(
         runtime_generator(cmd, core),

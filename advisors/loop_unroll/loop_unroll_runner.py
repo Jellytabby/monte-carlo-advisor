@@ -331,7 +331,13 @@ class LoopUnrollCompilerCommunicator:
 
                     action = self.read_action(fc)
                     if on_action:
-                        on_action(action)
+                        try:
+                            on_action(action)
+                        except Exception as e:
+                            compiler_proc.terminate()
+                            os.unlink(self.to_compiler)
+                            os.unlink(self.from_compiler)
+                            raise e
 
                     send_instrument_response(tc, None)
 
