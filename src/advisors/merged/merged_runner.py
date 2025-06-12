@@ -24,10 +24,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 import utils
+from advisors import log_reader
 from advisors.inline.inline_runner import InlineCompilerCommunicator
 from advisors.loop_unroll.loop_unroll_runner import LoopUnrollCompilerCommunicator
-
-from .. import log_reader
 
 logger = logging.getLogger(__name__)
 

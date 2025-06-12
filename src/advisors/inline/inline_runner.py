@@ -24,8 +24,7 @@ from time import sleep
 from typing import IO, Callable, List, Union
 
 import utils
-
-from .. import log_reader
+from advisors import log_reader
 
 logger = logging.getLogger(__name__)
 

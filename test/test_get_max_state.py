@@ -20,7 +20,7 @@ class DummyAdvisor(MonteCarloAdvisor[int]):
 
 class TestGetMaxState(unittest.TestCase):
     def test_empty_tree(self):
-        adv = DummyAdvisor()
+        adv = DummyAdvisor("test")
         # No children: root is the only node
         adv.root.score = 1.5
         adv.root.visits = 1
@@ -28,7 +28,7 @@ class TestGetMaxState(unittest.TestCase):
         self.assertIs(max_state, adv.root)
 
     def test_single_level_children(self):
-        adv = DummyAdvisor()
+        adv = DummyAdvisor("test")
         # Two children with distinct scores
         c1 = adv.root.add_child(0, score=2.0, speedup_sum=2.0, visits=1)
         c2 = adv.root.add_child(1, score=3.0, speedup_sum=3.0, visits=1)
@@ -36,7 +36,7 @@ class TestGetMaxState(unittest.TestCase):
         self.assertIs(max_state, c2)
 
     def test_nested_children(self):
-        adv = DummyAdvisor()
+        adv = DummyAdvisor("test")
         # Nested grandchildren scenario
         c1 = adv.root.add_child(0, score=1.0, speedup_sum=1.0, visits=1)
         gc = c1.add_child(0, score=5.0, speedup_sum=5.0, visits=1)
@@ -45,7 +45,7 @@ class TestGetMaxState(unittest.TestCase):
         self.assertIs(max_state, gc)
 
     def test_root_higher_than_children(self):
-        adv = DummyAdvisor()
+        adv = DummyAdvisor("test")
         # Root has the highest score
         adv.root.score = 10.0
         adv.root.visits = 1
@@ -54,7 +54,7 @@ class TestGetMaxState(unittest.TestCase):
         self.assertIs(max_state, adv.root)
 
     def test_sophia(self):
-        adv = DummyAdvisor()
+        adv = DummyAdvisor("test")
         adv.root.score = 7
 
         c8 = adv.root.add_child(0, 8.0)
@@ -67,7 +67,7 @@ class TestGetMaxState(unittest.TestCase):
         self.assertIs(max, c8)
 
     def test_sophia_2(self):
-        adv = DummyAdvisor()
+        adv = DummyAdvisor("test")
         adv.root.score = 2
 
         c6 = adv.root.add_child(0, 6)

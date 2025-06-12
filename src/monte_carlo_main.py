@@ -1,13 +1,12 @@
 import argparse
 import logging
 import os
-import sys
 
+import plot_main
 import utils
 from advisors.inline import inline_mc_advisor
 from advisors.loop_unroll import loop_unroll_mc_advisor
 from advisors.merged.merged_mc_advisor import MergedMonteCarloAdvisor
-from plots import plot_main
 
 logger = logging.getLogger(__name__)
 datefmt = "%Y-%m-%d %H:%M:%S"
@@ -166,8 +165,8 @@ def get_score(
     max_samples: int,
     core: int,
 ):
-    cmd = ["make", "module_obj"]
-    utils.get_cmd_output(cmd, timeout=120)
+    # cmd = ["make", "module_obj"]
+    # utils.get_cmd_output(cmd, timeout=120)
     cmd = ["make", "run"]
     runtimes = utils.adaptive_benchmark(
         runtime_generator(cmd, core),

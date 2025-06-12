@@ -14,7 +14,7 @@ endif
 # — Source files —
 MAIN_SRC     := $(INPUT)_main.$(SRC_EXT)
 MODULE_SRC   := $(INPUT)_module.$(SRC_EXT)
-PROF_SRC     := mc_profiler.$(SRC_EXT)
+PROF_SRC     := profiler/mc_profiler.$(SRC_EXT)
 OUT          ?= $(INPUT).out
 
 # — Object & intermediate files —

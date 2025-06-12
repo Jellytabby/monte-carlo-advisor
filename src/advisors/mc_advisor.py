@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from math import log, sqrt
 from typing import Any, Generic, Optional, TypeVar
 
-from . import log_reader
+from advisors import log_reader
 
 logger = logging.getLogger(__name__)
 
