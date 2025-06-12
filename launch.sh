@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 
 set -euo pipefail
+trap 'kill 0' SIGINT SIGTERM EXIT
 
 
 display_usage() {
@@ -21,7 +22,7 @@ while IFS= read -r bench_path; do
   # skip empty lines or comments
   [[ -z "$bench_path" || "${bench_path:0:1}" == "#" ]] && continue
   echo "Running Monte Carlo for $bench_path on core $core"
-  taskset -c $core python3 monte_carlo_main.py -lua -ia -r 100 -c $((core+1)) $bench_path &> $bench_path.txt &
+  taskset -c $core python3 monte_carlo_main.py -lua -ia -r 300 -c $((core+1)) $bench_path &> $bench_path.txt &
   core=$((core+2))
 done < "$LIST_FILE"
 

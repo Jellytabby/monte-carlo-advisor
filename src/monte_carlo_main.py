@@ -97,11 +97,6 @@ def main(args):
     input_dir = os.path.dirname(input_file)
     input_name = os.path.basename(input_file)
     os.environ["INPUT"] = input_file
-    make_clean()
-    get_input_module()
-    baseline = get_baseline_runtime(
-        args.warmup_runs, args.initial_samples, args.max_samples, args.core
-    )
 
     match (args.inline_advisor, args.loop_unroll_advisor):
         case (True, True):
@@ -111,7 +106,16 @@ def main(args):
         case (False, True):
             advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(input_name)
         case _:
-            exit(-1)
+            raise Exception(
+                "You need to specify at least one advisor. See '--help' for more information."
+            )
+
+    make_clean()
+    get_input_module()
+    baseline = get_baseline_runtime(
+        args.warmup_runs, args.initial_samples, args.max_samples, args.core
+    )
+
     advisor.run_monte_carlo(
         args.number_of_runs,
         input_dir + "/",

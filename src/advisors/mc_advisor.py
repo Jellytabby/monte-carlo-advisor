@@ -1,18 +1,15 @@
 import logging
-import tempfile
+import subprocess
 from abc import ABC, abstractmethod
 from math import log, sqrt
 from typing import Any, Generic, Optional, TypeVar
 
+import utils
 from advisors import log_reader
 
 logger = logging.getLogger(__name__)
 
 D = TypeVar("D", int, bool)
-
-
-class MonteCarloError(Exception):
-    pass
 
 
 class State(Generic[D]):
@@ -31,6 +28,7 @@ class State(Generic[D]):
         self.visits: int = visits
         self.parent: Optional["State"] = parent
         self.children: list["State"] = [] if children is None else children
+        self.subtree_is_fully_explored: bool = False
 
     def __repr__(self) -> str:
         return (
@@ -122,6 +120,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.default_path: list[D]
         self.current_path: list[D] = []
         self.all_runs: list[tuple[list[D], float]] = []
+        self.invalid_paths: set[list[D]] = set()
         self.max_speedup_after_n_iterations: list[float] = [1.0]
         self.filename = input_name
 
@@ -141,6 +140,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
 
     @abstractmethod
     def get_default_decision(self, tv, heuristic) -> D: ...
+
+    @abstractmethod
+    def set_state_as_fully_explored(self, state: State[D]): ...
 
     def wrap_advice(self, advice: D) -> Any:
         "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
@@ -190,13 +192,22 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
             self.advice,
         )
+        if self.current_path in self.invalid_paths:
+            raise subprocess.TimeoutExpired("no", 1)
         return scoring_function()
 
-    def update_score(self):
+    def update_score(self, score: float):
         assert self.current
+        self.current.speedup_sum += score
+        self.current.visits += 1
         self.current.score = (
             self.current.speedup_sum / self.current.visits
         )  # average speedup
+
+        if len(self.current.decisions) == len(
+            self.default_path
+        ):  # if we have as many decisions as the default path _in_ the node, then we have reached the bottom of the tree
+            self.current.subtree_is_fully_explored = True
 
     def get_max_state(self) -> State:
         def get_max_state_helper(current: State | None, max_state: State) -> State:
@@ -221,26 +232,31 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         max_score = 1.0
         for i in range(nr_of_turns):
             logger.info(f"Monte Carlo iteration {i}")
+            if self.root.subtree_is_fully_explored:
+                logger.info("Explored the entire tree!")
+                break
             try:
                 self.current = self.root
                 self.current_path = []
                 self.in_rollout = False
                 score = self.get_score(path, scoring_function)
                 while self.current:
-                    self.current.speedup_sum += score
-                    self.current.visits += 1
-                    self.update_score()
+                    self.update_score(score)
                     self.current = self.current.parent
                 self.all_runs.append((self.current_path[:], score))
                 max_score = max(max_score, score)
                 self.max_speedup_after_n_iterations.append(max_score)
-            except MonteCarloError:
+            except utils.MonteCarloError:
                 assert self.current
                 self.current.score = -999
                 self.current.speedup_sum = -999
                 self.current.visits = 1
                 self.all_runs.append((self.current_path[:], -999))
                 self.max_speedup_after_n_iterations.append(max_score)
+            except subprocess.TimeoutExpired:
+
+                self.invalid_paths.add(self.current_path[:])
+                # TODO: find some way to penalize llc/opt that takes too long, so that we avoid exploring that path again
             except KeyboardInterrupt as k:
                 logger.error(k)
                 break

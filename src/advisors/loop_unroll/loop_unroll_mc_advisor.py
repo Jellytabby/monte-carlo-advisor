@@ -6,8 +6,9 @@ from typing import final
 
 from typing_extensions import override
 
-from ..mc_advisor import MonteCarloAdvisor, MonteCarloError, State
-from . import loop_unroll_runner
+from advisors.loop_unroll import loop_unroll_runner
+from advisors.mc_advisor import MonteCarloAdvisor, State
+from utils import MonteCarloError
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,18 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             case heuristic:
                 return heuristic
 
+    def set_state_as_fully_explored(self, state: State[int]):
+        state.subtree_is_fully_explored = True
+        current = state.parent
+        while current:
+            if len(current.children) == self.MAX_UNROLL_FACTOR and all(
+                c.subtree_is_fully_explored for c in current.children
+            ):
+                current.subtree_is_fully_explored = True
+                current = current.parent
+            else:
+                return
+
     def get_next_state(self, state: State[int]) -> State[int]:
         if state.is_leaf():
             choice = self.get_rollout_decision()
@@ -78,29 +91,23 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             return state.add_child(random.choice(list(remaining_unroll_factors)))
 
     def check_unroll_success(self, action: bool):
-        if (
-            not action  # we did not unroll
-            and not self.in_rollout  # we dont care about rollouts
-            and self.current  # get typechecker to shush
-            and self.current.decisions[-1] != 1  # we did want to unroll
-        ):
-
+        if action:
+            return
+        if self.in_rollout and self.current_path[-1] != 1:
+            # we are in rollout, so we don't want to block off our mc state, but want the path to accurately reflect what choices we made
+            self.current_path[-1] = 1
+            return
+        if not self.in_rollout and self.current and self.current.decisions[-1] != 1:
+            assert self.current.is_leaf()
+            # should only happen in leaf states, otherwise would have triggered earlier
             logger.warning("Unsuccessful unrolling")
             raise MonteCarloError("unsuccessful unrolling")
 
     @override
-    def get_score(self, input_mod: bytes, scoring_function):
-        with (
-            tempfile.NamedTemporaryFile(suffix=".ll") as f1,
-            tempfile.NamedTemporaryFile(suffix=".bc") as f2,
-        ):
-            f1.write(input_mod)
-            f1.flush()
-
-            self.runner.compile_once(
-                self.opt_args() + ["-o", f2.name, f1.name],
-                self.advice,
-                on_action=self.check_unroll_success,
-            )
-            optimized_mod = f2.read()
-            return scoring_function(optimized_mod)
+    def get_score(self, path: str, scoring_function):
+        self.runner.compile_once(
+            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
+            self.advice,
+            on_action=self.check_unroll_success,
+        )
+        return scoring_function()

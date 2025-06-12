@@ -1,6 +1,6 @@
 import unittest
 
-from advisors.mc_advisor import MonteCarloAdvisor, State
+from src.advisors.mc_advisor import MonteCarloAdvisor, State
 
 
 # A dummy concrete advisor for testing get_max_state
@@ -16,6 +16,9 @@ class DummyAdvisor(MonteCarloAdvisor[int]):
 
     def get_default_decision(self, tv, heuristic) -> int:
         return 0
+
+    def set_state_as_fully_explored(self, state: State[int]):
+        return
 
 
 class TestGetMaxState(unittest.TestCase):

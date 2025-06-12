@@ -18,7 +18,7 @@ def plot_speedup(advisor: MonteCarloAdvisor, name: str):
 
     plt.figure()
     plt.step(iterations, speedup, where="post")
-    plt.fill_between(iterations, speedup, 1.0, alpha=0.3, step="post")
+    plt.fill_between(iterations, speedup, 1.0, alpha=0.1, step="post")
 
     plt.xlabel("Number of Iterations")
     plt.ylabel("Max Speedup")
@@ -27,7 +27,7 @@ def plot_speedup(advisor: MonteCarloAdvisor, name: str):
     plt.xticks(ticks)  # show one tick per iteration
     plt.tight_layout()
 
-    os.makedirs(f"plots/{name}", exist_ok=True)
+    os.makedirs(f"plots/export/{name}", exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"plots/{name}/{name}_{ts}.png"
+    fname = f"plots/export/{name}/{name}_{ts}.png"
     plt.savefig(fname)

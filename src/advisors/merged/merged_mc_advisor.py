@@ -1,7 +1,5 @@
 import logging
-import tempfile
 from math import sqrt
-from os import stat
 from typing import Any
 
 from typing_extensions import override
@@ -9,15 +7,16 @@ from typing_extensions import override
 from advisors import log_reader
 from advisors.inline.inline_mc_advisor import InlineMonteCarloAdvisor
 from advisors.loop_unroll.loop_unroll_mc_advisor import LoopUnrollMonteCarloAdvisor
-from advisors.mc_advisor import MonteCarloAdvisor, MonteCarloError, State
+from advisors.mc_advisor import MonteCarloAdvisor, State
 from advisors.merged.merged_runner import MergedCompilerCommunicator
+from utils import MonteCarloError
 
 logger = logging.getLogger(__name__)
 
 
 class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
     def __init__(self, input_name, C=sqrt(2)) -> None:
-        super().__init__(input_name)
+        super().__init__(input_name, C)
         self.inline_advisor = InlineMonteCarloAdvisor(input_name)
         self.loop_unroll_advisor = LoopUnrollMonteCarloAdvisor(input_name)
         self.runner = MergedCompilerCommunicator(input_name, False, False)
@@ -61,15 +60,37 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         else:
             return self.loop_unroll_advisor.get_default_decision(tv, heuristic)
 
-    def check_unroll_success(self, action: bool):
-        if (
-            not action  # we did not unroll
-            and not self.in_rollout  # we dont care about rollouts
-            and self.current  # get typechecker to shush
-            and self.current.decisions[-1] != 1  # we did want to unroll
-        ):
+    def set_state_as_fully_explored(self, state: State[int]):
+        state.subtree_is_fully_explored = True
+        current = state.parent
+        while current:
+            if type(current.children[0].decisions[-1]) is bool:
+                all_children_visited = len(current.children) == 2
+            elif type(current.children[0].decisions[-1]) is int:
+                all_children_visited = (
+                    len(current.children) == self.loop_unroll_advisor.MAX_UNROLL_FACTOR
+                )
+            else:
+                logger.error("Decisions should only be int or bools... what happened?")
+                exit(-1)
+            if all_children_visited and all(
+                c.subtree_is_fully_explored for c in current.children
+            ):
+                current.subtree_is_fully_explored = True
+                current = current.parent
+            else:
+                return
 
-            self.runner.stop_event.set()
+    def check_unroll_success(self, action: bool):
+        if action:
+            return
+        if self.in_rollout and self.current_path[-1] != 1:
+            # we are in rollout, so we don't want to block off our mc state, but want the path to accurately reflect what choices we made
+            self.current_path[-1] = 1
+            return
+        if not self.in_rollout and self.current and self.current.decisions[-1] != 1:
+            assert self.current.is_leaf()
+            # should only happen in leaf states, otherwise would have triggered earlier
             logger.warning("Unsuccessful unrolling")
             raise MonteCarloError("unsuccessful unrolling")
 

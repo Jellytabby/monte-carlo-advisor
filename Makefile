@@ -83,9 +83,12 @@ $(MODULE_POST_BC): $(MODULE_PRE_BC)
 $(MODULE_OBJ): $(MODULE_POST_BC)
 	llc -O3 -filetype=obj $< -o $@
 
+module_obj: $(MODULE_OBJ)
+
+
 # — Clean up artifacts —
 clean:
-	rm -f $(DIR)*.o $(DIR)*.bc $(DIR)*.out $(DIR)*.in *.ll $(PROF_OBJ)
+	rm -f $(DIR)*.o $(DIR)*.bc $(DIR)*.out $(DIR)*.in *.ll
 
 # — Run the built executable —
 run: all

@@ -5,8 +5,8 @@ import random
 from math import sqrt
 from typing import final
 
-from ..mc_advisor import MonteCarloAdvisor, State
-from . import inline_runner
+from advisors.inline import inline_runner
+from advisors.mc_advisor import MonteCarloAdvisor, State
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,18 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
 
     def get_default_decision(self, tv, heuristic) -> bool:
         return bool(tv[-1][0])
+
+    def set_state_as_fully_explored(self, state: State[bool]):
+        state.subtree_is_fully_explored = True
+        current = state.parent
+        while current:
+            if len(current.children) == 2 and all(
+                c.subtree_is_fully_explored for c in current.children
+            ):
+                current.subtree_is_fully_explored = True
+                current = current.parent
+            else:
+                return
 
     def get_next_state(self, state: State[bool]) -> State[bool]:
         if state.is_leaf():
