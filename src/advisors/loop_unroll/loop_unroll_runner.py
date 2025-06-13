@@ -21,6 +21,7 @@ import logging
 import math
 import os
 import subprocess
+import sys
 import tempfile
 from time import sleep
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
@@ -145,7 +146,7 @@ class LoopUnrollCompilerCommunicator:
         event = json.loads(fc.readline())
         logger.debug("Read" + str(event))
         assert "heuristic" in event
-        heuristic = int.from_bytes(fc.read(8), byteorder="little")
+        heuristic = int.from_bytes(fc.read(8), byteorder=sys.byteorder, signed=True)
         logger.debug(heuristic)
         fc.readline()
         return heuristic

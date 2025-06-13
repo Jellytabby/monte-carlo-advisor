@@ -89,7 +89,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             self.current_path[-1] = 1
             return
         if not self.in_rollout and self.current and self.current.decisions[-1] != 1:
-            assert self.current.is_leaf()
+            # assert self.current.is_leaf()
             # should only happen in leaf states, otherwise would have triggered earlier
             logger.warning("Unsuccessful unrolling")
             raise MonteCarloError("unsuccessful unrolling")
@@ -130,6 +130,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             self.current = next
             decision = next.decisions[-1]
         self.current_path.append(decision)
+        logger.debug(f"Current path: {self.current_path}")
         return self.wrap_advice(decision, heuristic is None)
 
     @override

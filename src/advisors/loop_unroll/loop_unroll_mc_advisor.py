@@ -58,8 +58,10 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
 
     def get_default_decision(self, tv, heuristic: int) -> int:
         match heuristic:
-            case 0:  # compiler returns 0 when no unrolling
+            case -1:  # compiler returns -1 when no unrolling
                 return 1
+            case 0:
+                return 1  # ngl, not sure if this is even possible
             case heuristic if heuristic > self.MAX_UNROLL_FACTOR:
                 return self.MAX_UNROLL_FACTOR
             case heuristic:
@@ -82,7 +84,10 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             choice = self.get_rollout_decision()
             return state.add_child(choice)
         if len(state.children) == self.MAX_UNROLL_FACTOR:
-            return max(state.children, key=self.uct)
+            return max(
+                (c for c in state.children if not c.subtree_is_fully_explored),
+                key=self.uct,
+            )
         else:
             visited_unroll_factors = set([c.decisions[-1] for c in state.children])
             remaining_unroll_factors = (

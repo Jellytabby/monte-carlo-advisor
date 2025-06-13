@@ -55,7 +55,12 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             choice = self.get_rollout_decision()
             return state.add_child(choice)
         elif len(state.children) == 2:
-            return max(state.children, key=self.uct)
+            return max(
+                (
+                    c for c in state.children if not c.subtree_is_fully_explored
+                ),  # we only want unexplored paths
+                key=self.uct,
+            )
         elif state.children[0].decisions[-1] == False:
             return state.add_child(True)
         elif state.children[0].decisions[-1] == True:

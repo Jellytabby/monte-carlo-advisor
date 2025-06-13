@@ -34,7 +34,7 @@ class State(Generic[D]):
         return (
             f"State(decisions={self.decisions}, "
             f"score={self.score:.7f},"
-            f"visits={self.visits})"
+            f"visits={self.visits})" + (f"*" if self.subtree_is_fully_explored else "")
         )
 
     def __getitem__(self, index: D):
@@ -177,9 +177,11 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             decision = self.get_rollout_decision()
         else:
             next = self.get_next_state(self.current)
+            assert next
             self.current = next
             decision = next.decisions[-1]
         self.current_path.append(decision)
+        logger.debug(f"Current path: {self.current_path}")
         return self.wrap_advice(decision)
 
     def uct(self, state: State) -> float:
@@ -207,7 +209,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         if len(self.current.decisions) == len(
             self.default_path
         ):  # if we have as many decisions as the default path _in_ the node, then we have reached the bottom of the tree
-            self.current.subtree_is_fully_explored = True
+            self.set_state_as_fully_explored(self.current)
 
     def get_max_state(self) -> State:
         def get_max_state_helper(current: State | None, max_state: State) -> State:
@@ -251,6 +253,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 self.current.score = -999
                 self.current.speedup_sum = -999
                 self.current.visits = 1
+                self.set_state_as_fully_explored(self.current)
                 self.all_runs.append((self.current_path[:], -999))
                 self.max_speedup_after_n_iterations.append(max_score)
             except subprocess.TimeoutExpired:
