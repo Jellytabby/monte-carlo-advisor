@@ -13,11 +13,7 @@
 # limitations under the License.
 """Module for communicate with compiler for unroll decisions"""
 
-import ctypes
-import io
 import logging
-import math
-import os
 import subprocess
 import tempfile
 import threading
@@ -32,48 +28,10 @@ from advisors.loop_unroll.loop_unroll_runner import LoopUnrollCompilerCommunicat
 logger = logging.getLogger(__name__)
 
 
-def send_instrument_response(f: BinaryIO, response: Optional[Tuple[str, str]]):
-    if response is None:
-        f.write(bytes([0]))
-        f.flush()
-    else:
-        f.write(bytes([1]))
-        begin = response[0].encode("ascii") + bytes([0])
-        end = response[1].encode("ascii") + bytes([0])
-        f.write(begin)
-        f.write(end)
-        f.flush()
-
-
-def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.TensorSpec):
-    """Send the `value` - currently just a scalar - formatted as per `spec`."""
-
-    if spec.element_type == ctypes.c_int64:
-        convert_el_func = int
-        ctype_func = ctypes.c_int64
-    elif spec.element_type == ctypes.c_float:
-        convert_el_func = float
-        ctype_func = ctypes.c_float
-    else:
-        print(spec.element_type, "not supported")
-        assert False
-
-    if isinstance(value, list):
-        to_send = (ctype_func * len(value))(*[convert_el_func(el) for el in value])
-    else:
-        to_send = ctype_func(convert_el_func(value))
-
-    assert f.write(bytes(to_send)) == ctypes.sizeof(spec.element_type) * math.prod(
-        spec.shape
-    )
-    f.flush()
-
-
 class MergedCompilerCommunicator:
     def __init__(
         self,
         input_name: str,
-        emit_assembly,
         debug,
     ):
         self.input_name = input_name
@@ -96,9 +54,12 @@ class MergedCompilerCommunicator:
         self.on_action = on_action
         self.stop_event: threading.Event = threading.Event()
 
+        # typechecker shenanigans
         compiler_proc = None
-        try:
-            with tempfile.TemporaryFile("b+x") as error_buffer:
+        inline_comm = None
+        loop_comm = None
+        with tempfile.TemporaryFile("b+x") as error_buffer:
+            try:
                 logger.debug(f"Launching compiler {' '.join(process_and_args)}")
                 compiler_proc = subprocess.Popen(
                     process_and_args,
@@ -108,16 +69,10 @@ class MergedCompilerCommunicator:
                 )
                 logger.debug(f"Sending module")
 
-                # FIXME: is this the proper way to close the pipe? if we don't set it to
-                # None then the communicate call will try to close it again and raise an
-                # error
-
                 inline_comm = InlineCompilerCommunicator(
                     self.input_name, True, self.stop_event
                 )
-                loop_comm = LoopUnrollCompilerCommunicator(
-                    self.input_name, False, False
-                )
+                loop_comm = LoopUnrollCompilerCommunicator(self.input_name, True)
 
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     fut_inline = executor.submit(
@@ -135,7 +90,6 @@ class MergedCompilerCommunicator:
                         None,
                         None,
                         self.on_action,
-                        None,
                         timeout,
                     )
 
@@ -156,6 +110,11 @@ class MergedCompilerCommunicator:
                 if status != 0:
                     exit(status)
 
-        finally:
-            if compiler_proc and compiler_proc.returncode is None:
-                utils.terminate(compiler_proc)
+            finally:
+                assert compiler_proc and inline_comm and loop_comm
+                if compiler_proc.returncode is None:
+                    utils.terminate(compiler_proc)
+                else:
+                    utils.clean_up_process(compiler_proc, error_buffer)
+                inline_comm.clean_up_pipes()
+                loop_comm.clean_up_pipes()

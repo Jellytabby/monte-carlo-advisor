@@ -1,6 +1,6 @@
 import logging
 from math import sqrt
-from typing import Any
+from typing import Any, Optional
 
 from typing_extensions import override
 
@@ -19,7 +19,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         super().__init__(input_name, C)
         self.inline_advisor = InlineMonteCarloAdvisor(input_name)
         self.loop_unroll_advisor = LoopUnrollMonteCarloAdvisor(input_name)
-        self.runner = MergedCompilerCommunicator(input_name, False, False)
+        self.runner = MergedCompilerCommunicator(input_name, True)
 
     def opt_args(self) -> list[str]:
         return [
@@ -144,10 +144,11 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             return self.loop_unroll_advisor.wrap_advice(advice)
 
     @override
-    def get_score(self, path: str, scoring_function):
+    def get_score(self, path: str, timeout: Optional[float], scoring_function):
         self.runner.compile_once(
             self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
             self.advice,
             on_action=self.check_unroll_success,
+            timeout=timeout,
         )
         return scoring_function()

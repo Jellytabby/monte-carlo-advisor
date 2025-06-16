@@ -18,7 +18,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     def __init__(self, input_name: str, C: float = sqrt(2)) -> None:
         super().__init__(input_name, C)
         self.runner: loop_unroll_runner.LoopUnrollCompilerCommunicator = (
-            loop_unroll_runner.LoopUnrollCompilerCommunicator(input_name, False, True)
+            loop_unroll_runner.LoopUnrollCompilerCommunicator(input_name, True)
         )
         self.filename = self.runner.channel_base
 
@@ -33,7 +33,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             "opt",
             # "-O3",
             "-passes=default<O3>,loop-unroll",
-            f"--mlgo-loop-unroll-interactive-channel-base={self.runner.channel_base}.channel-basename",
+            f"--mlgo-loop-unroll-interactive-channel-base={self.runner.channel_base}",
             "--mlgo-loop-unroll-advisor-mode=development",
             "--interactive-model-runner-echo-reply",
             "-debug-only=loop-unroll-development-advisor,loop-unroll",

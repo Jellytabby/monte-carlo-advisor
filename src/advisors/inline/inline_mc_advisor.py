@@ -28,7 +28,7 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             "-interactive-model-runner-echo-reply",
             "-debug-only=inline,inline-ml",
             "-enable-ml-inliner=release",
-            f"-inliner-interactive-channel-base={self.filename}.channel-basename",
+            f"-inliner-interactive-channel-base={self.filename}",
         ]
 
     def get_rollout_decision(self) -> bool:

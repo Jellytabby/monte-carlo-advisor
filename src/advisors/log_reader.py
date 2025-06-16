@@ -2,13 +2,14 @@
 
 See lib/Analysis/TrainingLogger.cpp for a description of the format.
 """
+
 import ctypes
 import dataclasses
 import io
 import json
 import math
 import sys
-from typing import List, Optional
+from typing import List, Optional, Union
 
 _element_types = {
     "float": ctypes.c_float,
@@ -22,6 +23,30 @@ _element_types = {
     "int64_t": ctypes.c_int64,
     "uint64_t": ctypes.c_uint64,
 }
+
+
+def send(f: io.BufferedWriter, value: Union[int, float], spec: "TensorSpec"):
+    """Send the `value` - currently just a scalar - formatted as per `spec`."""
+
+    if spec.element_type == ctypes.c_int64:
+        convert_el_func = int
+        ctype_func = ctypes.c_int64
+    elif spec.element_type == ctypes.c_float:
+        convert_el_func = float
+        ctype_func = ctypes.c_float
+    else:
+        print(spec.element_type, "not supported")
+        assert False
+
+    if isinstance(value, list):
+        to_send = (ctype_func * len(value))(*[convert_el_func(el) for el in value])
+    else:
+        to_send = ctype_func(convert_el_func(value))
+
+    assert f.write(bytes(to_send)) == ctypes.sizeof(spec.element_type) * math.prod(
+        spec.shape
+    )
+    f.flush()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -51,8 +76,7 @@ class TensorValue:
     def __init__(self, spec: TensorSpec, buffer: bytes):
         self._spec = spec
         self._buffer = buffer
-        self._view = ctypes.cast(
-            self._buffer, ctypes.POINTER(self._spec.element_type))
+        self._view = ctypes.cast(self._buffer, ctypes.POINTER(self._spec.element_type))
         self._len = math.prod(self._spec.shape)
 
     def spec(self) -> TensorSpec:
@@ -84,10 +108,8 @@ def pretty_print_tensor_value(tv: TensorValue):
 def read_header(f: io.BufferedReader):
     header = json.loads(f.readline())
     tensor_specs = [TensorSpec.from_dict(ts) for ts in header["features"]]
-    score_spec = TensorSpec.from_dict(
-        header["score"]) if "score" in header else None
-    advice_spec = TensorSpec.from_dict(
-        header["advice"]) if "advice" in header else None
+    score_spec = TensorSpec.from_dict(header["score"]) if "score" in header else None
+    advice_spec = TensorSpec.from_dict(header["advice"]) if "advice" in header else None
     return header, tensor_specs, score_spec, advice_spec
 
 

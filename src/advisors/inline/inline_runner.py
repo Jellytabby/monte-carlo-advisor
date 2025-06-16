@@ -11,93 +11,35 @@ test/Transforms/Inline/ML/interactive-mode.ll
 test/CodeGen/MLRegAlloc/interactive-mode.ll
 """
 
-import ctypes
 import io
 import json
 import logging
-import math
 import os
 import subprocess
-import tempfile
 import time
 from threading import Event
 from time import sleep
-from typing import IO, Callable, List, Optional, Union
+from typing import Callable, Optional, Union
 
 import utils
 from advisors import log_reader
+from advisors.mc_runner import CompilerCommunicator
 
 logger = logging.getLogger(__name__)
 
 
-def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.TensorSpec):
-    """Send the `value` - currently just a scalar - formatted as per `spec`."""
-
-    if spec.element_type == ctypes.c_int64:
-        convert_el_func = int
-        ctype_func = ctypes.c_int64
-    elif spec.element_type == ctypes.c_float:
-        convert_el_func = float
-        ctype_func = ctypes.c_float
-    else:
-        print(spec.element_type, "not supported")
-        assert False
-
-    if isinstance(value, list):
-        to_send = (ctype_func * len(value))(*[convert_el_func(el) for el in value])
-    else:
-        to_send = ctype_func(convert_el_func(value))
-
-    assert f.write(bytes(to_send)) == ctypes.sizeof(spec.element_type) * math.prod(
-        spec.shape
-    )
-    f.flush()
-
-
-class InlineCompilerCommunicator:
+class InlineCompilerCommunicator(CompilerCommunicator):
     def __init__(self, input_name: str, debug, event=None):
-        self.channel_base = input_name + type(self).__name__
-        self.to_compiler = self.channel_base + ".channel-basename.in"
-        self.from_compiler = self.channel_base + ".channel-basename.out"
-        self.debug: bool = debug
+        super().__init__(input_name, debug)
         self.event: Event | None = event
-
-    def compile_once(
-        self,
-        process_and_args: list[str],
-        advice: Callable[[List[log_reader.TensorValue]], Union[int, float, list]],
-        before_advice=None,
-        after_advice=None,
-    ):
-
-        with tempfile.TemporaryFile("b+x") as error_buffer:
-            compiler_proc = None
-            try:
-                logger.debug(f"Launching compiler {' '.join(process_and_args)}")
-                compiler_proc = subprocess.Popen(
-                    process_and_args,
-                    stderr=subprocess.DEVNULL if not self.debug else error_buffer,
-                    stdout=subprocess.PIPE,
-                    # stdin=subprocess.PIPE,
-                )
-                logger.debug("Sending module")
-                self.communicate_with_proc(
-                    compiler_proc, advice, before_advice, after_advice
-                )
-                status = utils.clean_up_process(compiler_proc, error_buffer)
-                if status != 0:
-                    exit(status)
-
-            finally:
-                if compiler_proc.poll() is None:
-                    compiler_proc.terminate()
 
     def communicate_with_proc(
         self,
         compiler_proc: subprocess.Popen[bytes],
         advice: Callable[[list[log_reader.TensorValue], int], Union[int, float, list]],
-        before_advice=None,
-        after_advice=None,
+        on_features=None,
+        on_heuristic=None,
+        on_action=None,
         timeout: Optional[float] = None,
     ):
 
@@ -218,11 +160,11 @@ class InlineCompilerCommunicator:
                         # logger.debug(fv.to_numpy())
                         # logger.debug(log_reader.string_tensor_value(fv))
                         tensor_values.append(fv)
-                    if before_advice is not None:
-                        before_advice(tc, fc)
-                    send(tc, advice(tensor_values, None), advice_spec)
-                    if after_advice is not None:
-                        after_advice(tc, fc)
+                    if on_features is not None:
+                        on_features(tc, fc)
+                    log_reader.send(tc, advice(tensor_values, None), advice_spec)
+                    if on_heuristic is not None:
+                        on_heuristic(tc, fc)
 
                 set_blocking(fc)
 

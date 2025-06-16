@@ -82,6 +82,12 @@ def parse_args_and_run():
         required=True,
         help="Core on which to execute the benchmark runs on.",
     )
+    parser.add_argument(
+        "-t",
+        "--timeout",
+        type=float,
+        help="Timeout for llc and opt processes",
+    )
 
     args = parser.parse_args()
     main(args)
@@ -119,11 +125,13 @@ def main(args):
     advisor.run_monte_carlo(
         args.number_of_runs,
         input_dir + "/",
+        args.timeout,
         lambda: get_score(
             baseline,
             args.warmup_runs,
             args.initial_samples,
             args.max_samples,
+            args.timeout,
             args.core,
         ),
     )
@@ -167,10 +175,11 @@ def get_score(
     warmup_runs: int,
     initial_samples: int,
     max_samples: int,
+    timeout: float,
     core: int,
 ):
     cmd = ["make", "module_obj"]
-    utils.get_cmd_output(cmd, timeout=120)
+    utils.get_cmd_output(cmd, timeout=timeout)
     cmd = ["make", "run"]
     runtimes = utils.adaptive_benchmark(
         runtime_generator(cmd, core),

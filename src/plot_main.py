@@ -22,7 +22,7 @@ def plot_speedup(advisor: MonteCarloAdvisor, name: str):
 
     plt.xlabel("Number of Iterations")
     plt.ylabel("Max Speedup")
-    plt.ylim(bottom=1.0)
+    plt.ylim(bottom=1.0, top=2.1)
     plt.title(f"Max Speedup over Iterations for {name}")
     plt.xticks(ticks)  # show one tick per iteration
     plt.tight_layout()

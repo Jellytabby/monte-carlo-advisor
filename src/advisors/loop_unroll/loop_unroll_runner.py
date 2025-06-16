@@ -22,13 +22,13 @@ import math
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from time import sleep
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
 import utils
 from advisors import log_reader
+from advisors.mc_runner import CompilerCommunicator
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +91,10 @@ class CompilationResult:
     num_decisions: int
 
 
-class LoopUnrollCompilerCommunicator:
+class LoopUnrollCompilerCommunicator(CompilerCommunicator):
     def __init__(
         self,
         input_name: str,
-        emit_assembly,
         debug,
     ):
         """
@@ -103,27 +102,11 @@ class LoopUnrollCompilerCommunicator:
         on_heuristic: operation on default decision of compiler
         on_action: operation on whether given unroll decision succeeded
         """
-        self.emit_assembly = emit_assembly
-        self.debug = debug
-
-        self.num_decisions = None
-        self.decisions = None
-
+        super().__init__(input_name, debug)
         self.features = []
 
         self.tensor_mode = "numpy"
         # self.tensor_mode = 'TensorValue'
-
-        self.channel_base = input_name + type(self).__name__
-        self.to_compiler = self.channel_base + ".channel-basename.in"
-        self.from_compiler = self.channel_base + ".channel-basename.out"
-
-        self.process_and_args = None
-        self.advice = None
-        self.on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None
-        self.on_heuristic: Optional[Callable[[int], Any]] = None
-        self.on_action: Optional[Callable[[bool], Any]] = None
-        self.get_instrument_response = (lambda _: None,)
 
         self.features_spec = None
         self.advice_spec = None
@@ -167,47 +150,6 @@ class LoopUnrollCompilerCommunicator:
     def get_features_spec(self):
         return self.features_spec
 
-    def compile_once(
-        self,
-        process_and_args: list[str],
-        advice: Callable[[List[log_reader.TensorValue], int], Union[int, float, list]],
-        on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
-        on_heuristic: Optional[Callable[[int], Any]] = None,
-        on_action: Optional[Callable[[bool], Any]] = None,
-        get_instrument_response=lambda _: None,
-    ):
-
-        with tempfile.TemporaryFile("b+x") as error_buffer:
-            compiler_proc = None
-            try:
-                logger.debug(f"Launching compiler {' '.join(process_and_args)}")
-                compiler_proc = subprocess.Popen(
-                    process_and_args,
-                    stderr=subprocess.DEVNULL if not self.debug else error_buffer,
-                    stdout=subprocess.PIPE,
-                    stdin=subprocess.PIPE,
-                )
-                logger.debug(f"Sending module")
-                # compiler_proc.stdin.write(mod)
-
-                # FIXME: is this the proper way to close the pipe? if we don't set it to
-                # None then the communicate call will try to close it again and raise an
-                # error
-                compiler_proc.stdin.close()
-                compiler_proc.stdin = None
-
-                self.communicate_with_proc(
-                    compiler_proc, advice, on_features, on_heuristic, on_action
-                )
-
-                status = utils.clean_up_process(compiler_proc, error_buffer)
-                if status != 0:
-                    exit(status)
-
-            finally:
-                if compiler_proc and compiler_proc.returncode is None:
-                    utils.terminate(compiler_proc)
-
     def communicate_with_proc(
         self,
         compiler_proc: subprocess.Popen[bytes],
@@ -215,7 +157,6 @@ class LoopUnrollCompilerCommunicator:
         on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
-        get_instrument_response=lambda _: None,
         timeout: Optional[float] = None,
     ):
         def set_nonblocking(pipe):
@@ -225,15 +166,6 @@ class LoopUnrollCompilerCommunicator:
             os.set_blocking(pipe.fileno(), True)
 
         logger.debug(f"Opening pipes {self.to_compiler} and {self.from_compiler}")
-
-        try:
-            os.unlink(self.to_compiler)
-        except FileNotFoundError:
-            pass
-        try:
-            os.unlink(self.from_compiler)
-        except FileNotFoundError:
-            pass
 
         os.mkfifo(self.to_compiler, 0o666)
         os.mkfifo(self.from_compiler, 0o666)

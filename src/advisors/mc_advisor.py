@@ -6,6 +6,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 import utils
 from advisors import log_reader
+from advisors.mc_runner import CompilerCommunicator
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         input_name: str,
         C: float = sqrt(2),
     ) -> None:
-        self.runner: Any
+        self.runner: CompilerCommunicator
         self.C = C
         self.root = State[D]()
         self.current = self.root
@@ -189,13 +190,12 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         assert parent and state.visits > 0
         return state.score + self.C * sqrt(log(parent.visits) / state.visits)
 
-    def get_score(self, path: str, scoring_function):
+    def get_score(self, path: str, timeout: Optional[float], scoring_function):
         self.runner.compile_once(
             self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
             self.advice,
+            timeout=timeout,
         )
-        if self.current_path in self.invalid_paths:
-            raise subprocess.TimeoutExpired("no", 1)
         return scoring_function()
 
     def update_score(self, score: float):
@@ -238,7 +238,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             self.max_speedup_after_n_iterations[-1]
         )
 
-    def run_monte_carlo(self, nr_of_turns: int, path: str, scoring_function):
+    def run_monte_carlo(
+        self, nr_of_turns: int, path: str, timeout: Optional[float], scoring_function
+    ):
         self.get_initial_tree(path)
         logger.info(self)
         max_score = 1.0
@@ -251,22 +253,29 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 self.current = self.root
                 self.current_path = []
                 self.in_rollout = False
-                score = self.get_score(path, scoring_function)
+                score = self.get_score(path, timeout, scoring_function)
                 while self.current:
                     self.update_score(score)
                     self.current = self.current.parent
                 self.all_runs.append((self.current_path[:], score))
                 max_score = max(max_score, score)
                 self.max_speedup_after_n_iterations.append(max_score)
-            except utils.MonteCarloError: # should happen if we have an invalid loop unroll while not in rollout
+            except (
+                utils.MonteCarloError
+            ):  # should happen if we have an invalid loop unroll while not in rollout
                 self.mark_state_as_invalid(self.current)
-            except (subprocess.TimeoutExpired, TimeoutError): # should happen if opt/llc times out
+            except (
+                subprocess.TimeoutExpired,
+                TimeoutError,
+            ):  # should happen if opt/llc times out
                 assert self.current
                 self.invalid_paths.add(tuple(self.current_path[:]))
                 if self.current.decisions == self.current_path:
                     self.mark_state_as_invalid(
                         self.current
                     )  # we timed out in a tree node
+                else:
+                    self.current.visits += 1
                 logger.warning(
                     f"State: {self.current} with decisions {self.current_path} timed out."
                 )
