@@ -23,6 +23,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from time import sleep
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
 
@@ -189,7 +190,7 @@ class LoopUnrollCompilerCommunicator:
                 logger.debug(f"Sending module")
                 # compiler_proc.stdin.write(mod)
 
-                # FIXME is this the proper way to close the pipe? if we don't set it to
+                # FIXME: is this the proper way to close the pipe? if we don't set it to
                 # None then the communicate call will try to close it again and raise an
                 # error
                 compiler_proc.stdin.close()
@@ -204,8 +205,8 @@ class LoopUnrollCompilerCommunicator:
                     exit(status)
 
             finally:
-                if compiler_proc is not None:
-                    compiler_proc.kill()
+                if compiler_proc and compiler_proc.returncode is None:
+                    utils.terminate(compiler_proc)
 
     def communicate_with_proc(
         self,
@@ -215,6 +216,7 @@ class LoopUnrollCompilerCommunicator:
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
         get_instrument_response=lambda _: None,
+        timeout: Optional[float] = None,
     ):
         def set_nonblocking(pipe):
             os.set_blocking(pipe.fileno(), False)
@@ -239,6 +241,7 @@ class LoopUnrollCompilerCommunicator:
         set_nonblocking(compiler_proc.stdout)
 
         logger.debug(f"Starting communication")
+        start = time.time()
 
         with io.BufferedWriter(io.FileIO(self.to_compiler, "w+b")) as tc:
             with io.BufferedReader(io.FileIO(self.from_compiler, "r+b")) as fc:
@@ -254,10 +257,18 @@ class LoopUnrollCompilerCommunicator:
                         return "dead"
                     return "no"
 
+                def no_stop_event():
+                    if timeout and time.time() - start > timeout:
+                        logger.debug(
+                            f"Timeout for opt in loop unroll runner: opt took longer than {timeout} seconds to complete."
+                        )
+                        # utils.terminate(compiler_proc) # we don't terminate the process here because it leads to issues when two threads call terminate() in rapid succession
+                        raise TimeoutError()
+                    return True
+
                 set_nonblocking(fc)
-                while True:
+                while no_stop_event():
                     ia = input_available()
-                    # print(ia)
                     if ia == "dead":
                         return None
                     elif ia == "yes":
@@ -273,7 +284,7 @@ class LoopUnrollCompilerCommunicator:
                 context = None
 
                 set_nonblocking(fc)
-                while True:
+                while no_stop_event():
                     ia = input_available()
                     if ia == "dead":
                         break
@@ -320,21 +331,14 @@ class LoopUnrollCompilerCommunicator:
                         advice_spec,
                     )
 
-                    # set_nonblocking(fc)
-                    # while len(fc.peek(1)) <= 0:
-                    #     # print("peeking")
-                    #     # print(compiler_proc.poll())
-                    #     if compiler_proc.poll() is not None:
-                    #         logger.warning("opt gave context but not observations")
-                    #         clean_up_process(compiler_proc)
-                    #         return
-
                     action = self.read_action(fc)
                     if on_action:
                         try:
                             on_action(action)
-                        except Exception as e:
-                            compiler_proc.terminate()
+                        except utils.MonteCarloError as e:
+                            # utils.terminate(
+                            #     compiler_proc
+                            # )  # do want to terminate, since action only raises exception when we have path we dont want to continue anymore -> no need to let inline continue, but termination is handled in corresponding compile_once function
                             os.unlink(self.to_compiler)
                             os.unlink(self.from_compiler)
                             raise e

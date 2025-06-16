@@ -19,9 +19,10 @@ import math
 import os
 import subprocess
 import tempfile
+import time
 from threading import Event
 from time import sleep
-from typing import IO, Callable, List, Union
+from typing import IO, Callable, List, Optional, Union
 
 import utils
 from advisors import log_reader
@@ -88,8 +89,8 @@ class InlineCompilerCommunicator:
                     exit(status)
 
             finally:
-                if compiler_proc is not None:
-                    compiler_proc.kill()
+                if compiler_proc.poll() is None:
+                    compiler_proc.terminate()
 
     def communicate_with_proc(
         self,
@@ -97,6 +98,7 @@ class InlineCompilerCommunicator:
         advice: Callable[[list[log_reader.TensorValue], int], Union[int, float, list]],
         before_advice=None,
         after_advice=None,
+        timeout: Optional[float] = None,
     ):
 
         def set_nonblocking(pipe):
@@ -122,6 +124,7 @@ class InlineCompilerCommunicator:
         set_nonblocking(compiler_proc.stdout)
 
         logger.debug("Starting communication")
+        start = time.time()
 
         with io.BufferedWriter(io.FileIO(self.to_compiler, "w+b")) as tc:
             with io.BufferedReader(io.FileIO(self.from_compiler, "r+b")) as fc:
@@ -138,6 +141,12 @@ class InlineCompilerCommunicator:
                     return "no"
 
                 def no_stop_event():
+                    if timeout and time.time() - start > timeout:
+                        logger.debug(
+                            f"Timeout for opt in inline runner: opt took longer than {timeout} seconds to complete."
+                        )
+                        # utils.terminate(compiler_proc) # we don't terminate the process here because it leads to issues when two threads call terminate() in rapid succession
+                        raise TimeoutError()
                     return not (self.event and self.event.is_set())
 
                 set_nonblocking(fc)
@@ -185,7 +194,11 @@ class InlineCompilerCommunicator:
                             return
                         if compiler_proc.poll() is not None:
                             logger.warning("opt gave context but not observations")
-                            utils.clean_up_process(compiler_proc)
+                            utils.clean_up_process(
+                                compiler_proc
+                            )  # cleanup not terminate, because we want loop unroll to finish
+                            os.unlink(self.to_compiler)
+                            os.unlink(self.from_compiler)
                             return
 
                     (

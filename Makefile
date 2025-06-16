@@ -92,5 +92,5 @@ clean:
 
 # — Run the built executable —
 run: all
-	./$(OUT)
+	$(OUT)
 

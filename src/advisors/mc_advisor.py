@@ -120,7 +120,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.default_path: list[D]
         self.current_path: list[D] = []
         self.all_runs: list[tuple[list[D], float]] = []
-        self.invalid_paths: set[list[D]] = set()
+        self.invalid_paths: set[tuple[D]] = set()
         self.max_speedup_after_n_iterations: list[float] = [1.0]
         self.filename = input_name
 
@@ -228,6 +228,16 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def get_max_run(self) -> tuple[list[D], float]:
         return max(self.all_runs, key=lambda x: x[1])
 
+    def mark_state_as_invalid(self, state: State[D]):
+        state.score = -999
+        state.speedup_sum = -999
+        state.visits = 1
+        self.set_state_as_fully_explored(state)
+        self.all_runs.append((self.current_path[:], -999))
+        self.max_speedup_after_n_iterations.append(
+            self.max_speedup_after_n_iterations[-1]
+        )
+
     def run_monte_carlo(self, nr_of_turns: int, path: str, scoring_function):
         self.get_initial_tree(path)
         logger.info(self)
@@ -248,21 +258,22 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 self.all_runs.append((self.current_path[:], score))
                 max_score = max(max_score, score)
                 self.max_speedup_after_n_iterations.append(max_score)
-            except utils.MonteCarloError:
+            except utils.MonteCarloError: # should happen if we have an invalid loop unroll while not in rollout
+                self.mark_state_as_invalid(self.current)
+            except (subprocess.TimeoutExpired, TimeoutError): # should happen if opt/llc times out
                 assert self.current
-                self.current.score = -999
-                self.current.speedup_sum = -999
-                self.current.visits = 1
-                self.set_state_as_fully_explored(self.current)
-                self.all_runs.append((self.current_path[:], -999))
-                self.max_speedup_after_n_iterations.append(max_score)
-            except subprocess.TimeoutExpired:
-
-                self.invalid_paths.add(self.current_path[:])
+                self.invalid_paths.add(tuple(self.current_path[:]))
+                if self.current.decisions == self.current_path:
+                    self.mark_state_as_invalid(
+                        self.current
+                    )  # we timed out in a tree node
+                logger.warning(
+                    f"State: {self.current} with decisions {self.current_path} timed out."
+                )
                 # TODO: find some way to penalize llc/opt that takes too long, so that we avoid exploring that path again
             except KeyboardInterrupt as k:
-                logger.error(k)
+                logger.error(f"Received keyboard interrupt {k}")
                 break
-            logger.debug(self)
+            # logger.debug(self)
         logger.info(self)
         logger.info(f"Highest scoring decisions: {self.get_max_run()}")

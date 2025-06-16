@@ -23,7 +23,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         self.filename = self.runner.channel_base
 
         # These need to be kept in sync with the ones in UnrollModelFeatureMaps.h
-        self.MAX_UNROLL_FACTOR = 5
+        self.MAX_UNROLL_FACTOR = 32
         self.UNROLL_FACTOR_OFFSET = 2
         # self.ADVICE_TENSOR_LEN = 1 + self.MAX_UNROLL_FACTOR - self.UNROLL_FACTOR_OFFSET
         self.ADVICE_TENSOR_LEN = 1 + 32 - self.UNROLL_FACTOR_OFFSET

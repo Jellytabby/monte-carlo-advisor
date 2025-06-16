@@ -91,6 +91,11 @@ def get_cmd_output(
         return outs
 
 
+def terminate(process: subprocess.Popen[bytes]):
+    process.terminate()
+    clean_up_process(process)
+
+
 def clean_up_process(
     process: subprocess.Popen[bytes], error_buffer: io.BufferedRandom | None = None
 ):

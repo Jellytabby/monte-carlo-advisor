@@ -17,6 +17,7 @@ import ctypes
 import io
 import logging
 import math
+import os
 import subprocess
 import tempfile
 import threading
@@ -86,6 +87,7 @@ class MergedCompilerCommunicator:
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
         get_instrument_response=lambda _: None,
+        timeout: Optional[float] = 10,
     ):
         self.process_and_args = process_and_args
         self.advice = advice
@@ -119,7 +121,12 @@ class MergedCompilerCommunicator:
 
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     fut_inline = executor.submit(
-                        inline_comm.communicate_with_proc, compiler_proc, advice
+                        inline_comm.communicate_with_proc,
+                        compiler_proc,
+                        advice,
+                        None,
+                        None,
+                        timeout,
                     )
                     fut_loop = executor.submit(
                         loop_comm.communicate_with_proc,
@@ -128,12 +135,21 @@ class MergedCompilerCommunicator:
                         None,
                         None,
                         self.on_action,
+                        None,
+                        timeout,
                     )
 
                     for fut in as_completed([fut_inline, fut_loop]):
                         try:
                             fut.result()
-                        except Exception as e:
+                        except TimeoutError as t:
+                            if fut_inline.done() and fut_loop.done():
+                                logger.warning(
+                                    f"Timeout: opt timed out after {timeout} seconds"
+                                )
+                                raise t
+                        except utils.MonteCarloError as e:
+                            self.stop_event.set()
                             raise e
 
                 status = utils.clean_up_process(compiler_proc, error_buffer)
@@ -141,5 +157,5 @@ class MergedCompilerCommunicator:
                     exit(status)
 
         finally:
-            if compiler_proc is not None:
-                compiler_proc.kill()
+            if compiler_proc and compiler_proc.returncode is None:
+                utils.terminate(compiler_proc)
