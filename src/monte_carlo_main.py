@@ -1,8 +1,10 @@
 import argparse
 import logging
 import os
+from datetime import datetime
 
 import psutil
+from matplotlib.pyplot import plot
 
 import plot_main
 import utils
@@ -139,6 +141,7 @@ def main(args):
                 "You need to specify at least one advisor. See '--help' for more information."
             )
 
+    start = datetime.now().strftime("%Y%m%d_%H%M%S")
     make_clean()
     get_input_module()
     baseline = get_baseline_runtime(
@@ -158,6 +161,7 @@ def main(args):
             next_free_core,
         ),
     )
+    plot_main.log_results(advisor, args, start, input_name)
     plot_main.plot_speedup(advisor, input_name)
     del os.environ["INPUT"]  # NOTE: makes no difference apparently?
 

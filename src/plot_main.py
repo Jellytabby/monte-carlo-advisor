@@ -22,12 +22,28 @@ def plot_speedup(advisor: MonteCarloAdvisor, name: str):
 
     plt.xlabel("Number of Iterations")
     plt.ylabel("Max Speedup")
-    plt.ylim(bottom=1.0, top=2.1)
+    plt.ylim(bottom=1.0)
     plt.title(f"Max Speedup over Iterations for {name}")
     plt.xticks(ticks)  # show one tick per iteration
     plt.tight_layout()
 
-    os.makedirs(f"plots/export/{name}", exist_ok=True)
+    os.makedirs(f"plots/{name}", exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"plots/export/{name}/{name}_{ts}.png"
+    fname = f"plots/{name}/{name}_{ts}.png"
     plt.savefig(fname)
+
+
+def log_results(advisor: MonteCarloAdvisor, args, start_time, name: str):
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = f"plots/{name}/{name}_{ts}.log"
+    with open(path, "w+") as f:
+        f.write(f"RESULTS FOR {name}\n")
+        f.write(f"Arguments: {args}\n")
+        f.write(f"Program start at: {start_time} and ended at {ts}\n")
+        f.write(f"{'Iteration':<10} {'Max':<10} {'Run':<100} {'Score':<10}\n")
+        for i, r in enumerate(advisor.all_runs):
+            f.write(
+                f"{i:<10} {advisor.max_speedup_after_n_iterations[i]:<10.5f} {str(r[0]):<100} {r[1]:<10.5f}\n"
+            )
+        f.write(str(advisor))
+

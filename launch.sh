@@ -1,8 +1,6 @@
 #!/usr/bin/bash
 
 set -euo pipefail
-trap 'kill 0' SIGINT SIGTERM EXIT
-
 
 display_usage() {
   echo "Usage: $0 [-s|-c|-m] <bench-list-file>"

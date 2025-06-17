@@ -122,7 +122,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.current_path: list[D] = []
         self.all_runs: list[tuple[list[D], float]] = []
         self.invalid_paths: set[tuple[D]] = set()
-        self.max_speedup_after_n_iterations: list[float] = [1.0]
+        self.max_speedup_after_n_iterations: list[float] = []
         self.filename = input_name
 
     def __repr__(self):
@@ -170,6 +170,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         assert self.current
         self.default_path = self.current.decisions
         self.all_runs.append((self.default_path[:], 1.0))
+        self.max_speedup_after_n_iterations.append(1.0)
 
     def advice(self, tv, heuristic) -> Any:
         assert self.current

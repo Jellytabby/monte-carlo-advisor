@@ -102,10 +102,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         ) -> Any:
             assert self.current
             default_decision = self.get_default_decision(tv, heuristic)
-            child = self.current.add_child(default_decision)
-            child.score = 1.0
-            child.speedup_sum = 1.0
-            child.visits = 1
+            child = self.current.add_child(default_decision, 1.0, 1.0, 1)
             self.current = child
             return self.wrap_advice(default_decision, heuristic is None)
 
@@ -119,6 +116,8 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         )
         assert self.current
         self.default_path = self.current.decisions
+        self.all_runs.append((self.default_path[:], 1.0))
+        self.max_speedup_after_n_iterations.append(1.0)
 
     @override
     def advice(self, tv, heuristic) -> Any:

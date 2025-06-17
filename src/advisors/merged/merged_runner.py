@@ -24,11 +24,12 @@ import utils
 from advisors import log_reader
 from advisors.inline.inline_runner import InlineCompilerCommunicator
 from advisors.loop_unroll.loop_unroll_runner import LoopUnrollCompilerCommunicator
+from advisors.mc_runner import CompilerCommunicator
 
 logger = logging.getLogger(__name__)
 
 
-class MergedCompilerCommunicator:
+class MergedCompilerCommunicator(CompilerCommunicator):
     def __init__(
         self,
         input_name: str,
@@ -44,7 +45,6 @@ class MergedCompilerCommunicator:
         on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
-        get_instrument_response=lambda _: None,
         timeout: Optional[float] = 10,
     ):
         self.process_and_args = process_and_args

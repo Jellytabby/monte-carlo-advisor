@@ -8,4 +8,5 @@ __pycache__
 *.out
 *.in
 *.png
+*.log
 *.tar.gz
