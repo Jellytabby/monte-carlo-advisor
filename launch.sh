@@ -17,13 +17,13 @@ display_help() {
 
 
 LIST_FILE="$1"
-core=0
+core=2
 while IFS= read -r bench_path; do
   # skip empty lines or comments
   [[ -z "$bench_path" || "${bench_path:0:1}" == "#" ]] && continue
   echo "Running Monte Carlo for $bench_path on core $core"
-  taskset -c $core python3 monte_carlo_main.py -lua -ia -r 300 -c $((core+1)) $bench_path &> $bench_path.txt &
-  core=$((core+2))
+  python3 src/monte_carlo_main.py -lua -ia -r 300 -c $core $bench_path &> $bench_path.txt &
+  core=$((core+1))
 done < "$LIST_FILE"
 
 wait

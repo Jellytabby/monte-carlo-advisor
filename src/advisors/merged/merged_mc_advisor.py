@@ -87,7 +87,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         if self.in_rollout and self.current_path[-1] != 1:
             # we are in rollout, so we don't want to block off our mc state, but want the path to accurately reflect what choices we made
             self.current_path[-1] = 1
-            logger.warning("Unsuccessful unrolling during rollout")
+            logger.debug("Unsuccessful unrolling during rollout")
             return
         if not self.in_rollout and self.current and self.current.decisions[-1] != 1:
             # assert self.current.is_leaf()

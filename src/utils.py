@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+import psutil
 from scipy import stats
 
 from datastructures import *
@@ -19,6 +20,42 @@ class MonteCarloError(Exception):
 
 def basename(file: str) -> str:
     return Path(file).stem
+
+
+def get_core_maps() -> tuple[dict[int, tuple[int, int]], dict[int, int]]:
+    output = subprocess.check_output("lscpu -p=CPU,Core", shell=True).decode()
+    lines = [line for line in output.splitlines() if not line.startswith("#")]
+    physical_to_logical = {}
+    logical_to_physical = {}
+    for line in lines:
+        cpu, core = map(int, line.split(","))
+        if core not in physical_to_logical:
+            physical_to_logical[core] = [cpu]
+        else:
+            physical_to_logical[core].append(cpu)
+        logical_to_physical[cpu] = core
+    return physical_to_logical, logical_to_physical
+
+
+def get_next_free_physical_core(start=2):
+    num_cores = psutil.cpu_count(logical=False)  # physical cores only
+    _, l_to_p_map = get_core_maps()
+    assert num_cores
+    used = set()
+    for p in psutil.process_iter(attrs=["username", "cpu_affinity", "name"]):
+        if "sophia.herrmann" in p.info["username"] and "make run" in p.info["name"]:
+            print(p.info)
+            try:
+                aff = p.info["cpu_affinity"]
+                [used.add(l_to_p_map[c]) for c in aff]
+                logger.info(f"Logical cpus already in use: {aff}")
+            except Exception:
+                continue
+    for core in range(start, num_cores):
+        if core not in used:
+            logger.info(f"First free physical core: {core}")
+            return core
+    raise RuntimeError("No free core found")
 
 
 def get_cmd_output(

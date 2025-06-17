@@ -2,6 +2,8 @@ import argparse
 import logging
 import os
 
+import psutil
+
 import plot_main
 import utils
 from advisors.inline import inline_mc_advisor
@@ -99,6 +101,27 @@ def main(args):
     else:
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
 
+    MANAGER_PHYSICAL_CORES = 8
+    physical_to_logical, _ = utils.get_core_maps()
+
+    logical_cores = sum(
+        [physical_to_logical[i] for i in range(MANAGER_PHYSICAL_CORES)], []
+    )
+    logger.info(f"Python script running on logical cores: {logical_cores}")
+    os.sched_setaffinity(0, set(logical_cores))
+
+    # next_free_core = physical_to_logical[
+    #     utils.get_next_free_physical_core(MANAGER_PHYSICAL_CORES)
+    # ][0]
+
+    if args.core < MANAGER_PHYSICAL_CORES:
+        raise RuntimeError(f"Core {args.core} is reserved for the manager process")
+    try:
+        next_free_core = physical_to_logical[args.core][0]
+    except:
+        raise RuntimeError(f"Core {args.core} is out of range")
+
+    logger.info(f"Benchmark core is {next_free_core}")
     input_file = args.input_file
     input_dir = os.path.dirname(input_file)
     input_name = os.path.basename(input_file)
@@ -119,7 +142,7 @@ def main(args):
     make_clean()
     get_input_module()
     baseline = get_baseline_runtime(
-        args.warmup_runs, args.initial_samples, args.max_samples, args.core
+        args.warmup_runs, args.initial_samples, args.max_samples, next_free_core
     )
 
     advisor.run_monte_carlo(
@@ -132,7 +155,7 @@ def main(args):
             args.initial_samples,
             args.max_samples,
             args.timeout,
-            args.core,
+            next_free_core,
         ),
     )
     plot_main.plot_speedup(advisor, input_name)
