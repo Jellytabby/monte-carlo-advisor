@@ -145,14 +145,15 @@ def clean_up_process(
     except ValueError:
         return 0
     status = process.wait()
-    if error_buffer and error_buffer.peek(1):
+    if error_buffer:
         error_buffer.seek(0)
-        if status != 0:
-            logger.error(error_buffer.read().decode())
-        else:
-            logger.info(
-                f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}"
-            )
+        if error_buffer.peek(1):
+            if status != 0:
+                logger.error(error_buffer.read().decode())
+            else:
+                logger.debug(
+                    f"\n{selective_mlgo_output(error_buffer.read().decode('utf-8'))}"
+                )
     logger.debug(f"Outs size {len(outs)}")
     logger.debug(f"Status {status}")
     return status

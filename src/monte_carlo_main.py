@@ -144,10 +144,14 @@ def main(args):
     start = datetime.now().strftime("%Y%m%d_%H%M%S")
     make_clean()
     get_input_module()
+
+    logger.info("Starting baseline benchmarking")
     baseline = get_baseline_runtime(
         args.warmup_runs, args.initial_samples, args.max_samples, next_free_core
     )
+    logger.info("Completed baseline benchmarking")
 
+    logger.info("Starting Monte Carlo Tree runs")
     advisor.run_monte_carlo(
         args.number_of_runs,
         input_dir + "/",

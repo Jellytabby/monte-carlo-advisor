@@ -279,6 +279,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                     self.all_runs.append(
                         (self.current_path[:], utils.TIMEOUT_ERROR_CODE)
                     )
+                    self.max_speedup_after_n_iterations.append(
+                        self.max_speedup_after_n_iterations[-1]
+                    )
                     self.current.visits += 1
                 logger.warning(
                     f"State: {self.current} with decisions {self.current_path} timed out."

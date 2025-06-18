@@ -106,15 +106,16 @@ class MergedCompilerCommunicator(CompilerCommunicator):
                             self.stop_event.set()
                             raise e
 
-                status = utils.clean_up_process(compiler_proc, error_buffer)
-                if status != 0:
-                    exit(status)
-
             finally:
                 assert compiler_proc and inline_comm and loop_comm
+                inline_comm.clean_up_pipes()
+                loop_comm.clean_up_pipes()
                 if compiler_proc.returncode is None:
                     utils.terminate(compiler_proc)
                 else:
-                    utils.clean_up_process(compiler_proc, error_buffer)
-                inline_comm.clean_up_pipes()
-                loop_comm.clean_up_pipes()
+                    status = utils.clean_up_process(compiler_proc, error_buffer)
+                    if (
+                        status != 0 and status != -15
+                    ):  # -15 is us terminating the process
+                        logger.error(f"Process failed with error code: {status}")
+                        exit(status)
