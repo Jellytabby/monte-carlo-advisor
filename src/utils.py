@@ -139,7 +139,7 @@ def get_cmd_output(
 
         logger.debug("Finished.")
         logger.debug(f"Output: {outs.decode()}")
-        return outs
+        return outs, errs
 
 
 def terminate(process: subprocess.Popen[bytes]):
@@ -154,7 +154,7 @@ def clean_up_process(
     try:
         outs, _ = process.communicate()
     except ValueError:
-        return 0
+        return -1
     status = process.wait()
     if error_buffer:
         error_buffer.seek(0)
@@ -179,7 +179,7 @@ def selective_mlgo_output(log: str):
 
 
 def readout_mc_inline_timer(input: str) -> int:
-    re_match = re.search("MC_TIMER ([0-9]+)", input)
+    re_match = re.search("InputGenTimer replay: ([0-9]+) nanoseconds", input)
     if re_match is None:
         raise Exception(
             "No measurement found. Are you calling __mc_profiling_begin() in your code?"

@@ -1,33 +1,35 @@
 # — Configurable inputs —
-INPUT        ?= loop
-DIR          := $(dir $(INPUT))
+INPUT_DIR    ?= /scr/$(USER)/src/LULESH/recorded_inputs/_ZL16LagrangeLeapFrogR6Domain/
+RECORDED_INP := $(INPUT_DIR)input-0.inp
+
 
 # — Detect source extension & compiler —
-ifeq ($(wildcard $(INPUT)_main.cpp),)
-  SRC_EXT    := c
-  CC         := clang
-else
-  SRC_EXT    := cpp
-  CC         := clang++
-endif
-
-# — Source files —
-MAIN_SRC     := $(INPUT)_main.$(SRC_EXT)
-MODULE_SRC   := $(INPUT)_module.$(SRC_EXT)
-PROF_SRC     := profiler/mc_profiler.$(SRC_EXT)
-OUT          ?= $(INPUT).out
-
-# — Object & intermediate files —
-MAIN_OBJ     := $(MAIN_SRC:.$(SRC_EXT)=.o)
-PROF_OBJ     := $(PROF_SRC:.$(SRC_EXT)=.o)
-MODULE_PRE_BC  := $(DIR)mod-pre-mc.bc
-MODULE_POST_BC := $(DIR)mod-post-mc.bc
-MODULE_OBJ    := $(DIR)mod-post-mc.o
+# ifeq ($(wildcard $(INPUT)_main.cpp),)
+#   SRC_EXT    := c
+#   CC         := clang
+# else
+#   SRC_EXT    := cpp
+#   CC         := clang++
+# endif
+#
+# # — Source files —
+# MAIN_SRC     := $(INPUT)_main.$(SRC_EXT)
+MODULE_SRC   := $(INPUT_DIR)replay_module.bc
+# PROF_SRC     := profiler/mc_profiler.$(SRC_EXT)
+CC			 := clang++
+OUT          ?= $(INPUT_DIR)replay.out
+#
+# # — Object & intermediate files —
+# MAIN_OBJ     := $(MAIN_SRC:.$(SRC_EXT)=.o)
+# PROF_OBJ     := $(PROF_SRC:.$(SRC_EXT)=.o)
+MODULE_PRE_BC  := $(INPUT_DIR)mod-pre-mc.bc
+MODULE_POST_BC := $(INPUT_DIR)mod-post-mc.bc
+MODULE_OBJ    := $(INPUT_DIR)mod-post-mc.o
 
 # — Project-specific flags (comment out entire line to disable) —
-INC          := -I/scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/
-EXTRA_OBJS   := /scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/polybench.o
-EXTRA_FLAGS  := -DPOLYBENCH_USE_C99_PROTO -lm
+# INC          := -I/scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/
+# EXTRA_OBJS   := /scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/polybench.o
+EXTRA_FLAGS  := -linputgen.replay_recorded-x86_64 -fopenmp -fPIE
 
 # — Compiler flags —
 CFLAGS       := -O3 $(INC) $(EXTRA_FLAGS)
@@ -39,19 +41,22 @@ CFLAGS       := -O3 $(INC) $(EXTRA_FLAGS)
 # — Phony targets —
 .PHONY: all clean run run_baseline readable
 
+print: 
+	@echo $(INPUT_DIR)
+
 # — Default target —
 all: $(OUT) $(MODULE_POST_BC)
 
 # — Link final executable —
-$(OUT): $(MAIN_OBJ) $(PROF_OBJ) $(MODULE_OBJ) $(EXTRA_OBJS)
+$(OUT): $(MODULE_OBJ)
 	$(CC) $(EXTRA_FLAGS) $^ -o $@
 
 # — Baseline build & run —
-$(DIR)baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC) $(EXTRA_OBJS)
+$(INPUT_DIR)baseline.out: $(MODULE_SRC)
 	$(CC) $(CFLAGS) $^ -o $@
 
-run_baseline: $(DIR)baseline.out
-	$(DIR)baseline.out
+run_baseline: $(INPUT_DIR)baseline.out
+	$(INPUT_DIR)baseline.out $(RECORDED_INP)
 
 # — Compile main source —
 $(MAIN_OBJ): $(MAIN_SRC)
@@ -88,9 +93,9 @@ module_obj: $(MODULE_OBJ)
 
 # — Clean up artifacts —
 clean:
-	rm -f $(DIR)*.o $(DIR)*.bc $(DIR)*.out $(DIR)*.in *.ll
+	rm -f $(INPUT_DIR)*.o $(INPUT_DIR)mod-post-mc.bc $(INPUT_DIR)*.out $(INPUT_DIR)*.in *.ll
 
 # — Run the built executable —
 run: all
-	$(OUT)
+	$(OUT) $(RECORDED_INP)
 

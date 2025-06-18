@@ -30,7 +30,7 @@ def parse_args_and_run():
     parser.add_argument(
         "input_file",
         type=str,
-        help="Path to input. The script expects two files, <input>_main.[c|cpp] and <input>_kernel.[c|cpp] respectively.",
+        help="Path to input dorectory. The script expects a replay_module.bc and at one input named 'input-0.inp' in this directory",
     )
     parser.add_argument(
         "--debug",
@@ -135,11 +135,9 @@ def main(args):
         raise RuntimeError(f"Core {args.core} is out of range")
 
     logger.info(f"Benchmark core is {next_free_core}")
-    logger.info(f"Script started with arguments: {args}")
-    input_file = args.input_file
-    input_dir = os.path.dirname(input_file)
-    input_name = os.path.basename(input_file)
-    os.environ["INPUT"] = input_file
+    input_dir = args.input_file
+    input_name = input_dir.split("/")[-2]
+    os.environ["INPUT_DIR"] = input_dir
 
     match (args.inline_advisor, args.loop_unroll_advisor):
         case (True, True):
@@ -212,10 +210,10 @@ def get_baseline_runtime(
 def runtime_generator(cmd: list[str], core: int):
     logger.debug(cmd)
     while True:
-        outs = utils.get_cmd_output(
+        _, errs = utils.get_cmd_output(
             cmd, pre_exec_function=lambda: os.sched_setaffinity(0, {core})
         )
-        yield utils.readout_mc_inline_timer(outs.decode())
+        yield utils.readout_mc_inline_timer(errs.decode())
 
 
 def get_score(

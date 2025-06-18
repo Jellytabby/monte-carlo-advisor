@@ -260,7 +260,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self, nr_of_turns: int, path: str, timeout: Optional[float], scoring_function
     ):
         self.get_initial_tree(path)
-        logger.info(self)
+        # logger.info(self)
         max_score = 1.0
         for i in range(nr_of_turns):
             logger.info(f"Monte Carlo iteration {i}")
@@ -312,5 +312,5 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 print(f"Encountered an unhandled exception: {e}")
                 raise e
             # logger.debug(self)
-        logger.info(self)
+        # logger.info(self)
         logger.info(f"Highest scoring decisions: {self.get_max_run()}")
