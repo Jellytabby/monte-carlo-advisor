@@ -35,7 +35,9 @@ def plot_speedup(advisor: MonteCarloAdvisor, name: str):
 
 def log_results(advisor: MonteCarloAdvisor, args, start_time, name: str):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = f"plots/{name}/{name}_{ts}.log"
+    path_dir = f"plots/{name}/"
+    os.makedirs(path_dir, exist_ok=True)
+    path = f"{path_dir}/{name}_{ts}.log"
     with open(path, "w+") as f:
         f.write(f"RESULTS FOR {name}\n")
         f.write(f"Arguments: {args}\n")
