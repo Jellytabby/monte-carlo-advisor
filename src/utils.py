@@ -13,6 +13,9 @@ from datastructures import *
 
 logger = logging.getLogger(__name__)
 
+LOOP_UNROLL_ERROR_CODE = -999
+TIMEOUT_ERROR_CODE = -111
+
 
 class MonteCarloError(Exception):
     pass

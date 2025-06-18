@@ -229,12 +229,12 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def get_max_run(self) -> tuple[list[D], float]:
         return max(self.all_runs, key=lambda x: x[1])
 
-    def mark_state_as_invalid(self, state: State[D]):
-        state.score = -999
-        state.speedup_sum = -999
+    def mark_state_as_invalid(self, state: State[D], error_code: int):
+        state.score = error_code
+        state.speedup_sum = error_code
         state.visits = 1
         self.set_state_as_fully_explored(state)
-        self.all_runs.append((self.current_path[:], -999))
+        self.all_runs.append((self.current_path[:], error_code))
         self.max_speedup_after_n_iterations.append(
             self.max_speedup_after_n_iterations[-1]
         )
@@ -264,7 +264,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             except (
                 utils.MonteCarloError
             ):  # should happen if we have an invalid loop unroll while not in rollout
-                self.mark_state_as_invalid(self.current)
+                self.mark_state_as_invalid(self.current, utils.LOOP_UNROLL_ERROR_CODE)
             except (
                 subprocess.TimeoutExpired,
                 TimeoutError,
@@ -273,9 +273,12 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 self.invalid_paths.add(tuple(self.current_path[:]))
                 if self.current.decisions == self.current_path:
                     self.mark_state_as_invalid(
-                        self.current
+                        self.current, utils.TIMEOUT_ERROR_CODE
                     )  # we timed out in a tree node
                 else:
+                    self.all_runs.append(
+                        (self.current_path[:], utils.TIMEOUT_ERROR_CODE)
+                    )
                     self.current.visits += 1
                 logger.warning(
                     f"State: {self.current} with decisions {self.current_path} timed out."

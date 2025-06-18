@@ -45,5 +45,8 @@ def log_results(advisor: MonteCarloAdvisor, args, start_time, name: str):
             f.write(
                 f"{i:<10} {advisor.max_speedup_after_n_iterations[i]:<10.5f} {str(r[0]):<100} {r[1]:<10.5f}\n"
             )
-        f.write(str(advisor))
+        f.write(str(advisor)+'\n')
+        f.write(f"Best run: {advisor.get_max_run()}\n")
+        f.write(f"Best state: {advisor.get_max_state()}\n")
+
 
