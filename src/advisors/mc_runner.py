@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 class CompilerCommunicator:
     def __init__(self, input_name, debug):
         self.channel_base: str = input_name + type(self).__name__
-        self.to_compiler = self.channel_base + ".channel-basename.in"
-        self.from_compiler = self.channel_base + ".channel-basename.out"
+        self.to_compiler = self.channel_base + ".in"
+        self.from_compiler = self.channel_base + ".out"
         self.debug: bool = debug
 
     @abstractmethod
@@ -51,6 +51,7 @@ class CompilerCommunicator:
                     process_and_args,
                     stderr=subprocess.DEVNULL if not self.debug else error_buffer,
                     stdout=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
                 )
                 logger.debug("Sending module")
                 self.communicate_with_proc(
@@ -59,8 +60,13 @@ class CompilerCommunicator:
 
             finally:
                 assert compiler_proc
+                self.clean_up_pipes()
                 if compiler_proc.returncode is None:
                     utils.terminate(compiler_proc)
                 else:
-                    utils.clean_up_process(compiler_proc, error_buffer)
-                self.clean_up_pipes()
+                    status = utils.clean_up_process(compiler_proc, error_buffer)
+                    if (
+                        status != 0 and status != -15
+                    ):  # -15 is us terminating the process
+                        logger.error(f"Process failed with error code: {status}")
+                        exit(status)

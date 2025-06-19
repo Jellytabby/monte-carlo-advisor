@@ -2,7 +2,7 @@ import logging
 import random
 import tempfile
 from math import sqrt
-from typing import final
+from typing import Optional, final
 
 from typing_extensions import override
 
@@ -22,13 +22,13 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         )
         self.filename = self.runner.channel_base
 
-        self.MAX_UNROLL_FACTOR = 2
+        self.MAX_UNROLL_FACTOR = 5
 
     def opt_args(self) -> list[str]:
         return [
             "opt",
-            # "-O3",
-            "-passes=default<O3>,loop-unroll",
+            "-O3",
+            # "-passes=default<O3>,loop-unroll",
             f"--mlgo-loop-unroll-interactive-channel-base={self.runner.channel_base}",
             "--mlgo-loop-unroll-advisor-mode=development",
             "--interactive-model-runner-echo-reply",
@@ -40,7 +40,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         return factor
 
     @override
-    def wrap_advice(self, advice: int) -> list[float]:
+    def wrap_advice(self, advice: int) -> int:
         return self.make_response_for_factor(advice)
 
     def get_rollout_decision(self) -> int:
@@ -93,16 +93,17 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             self.current_path[-1] = 1
             return
         if not self.in_rollout and self.current and self.current.decisions[-1] != 1:
-            assert self.current.is_leaf()
+            # assert self.current.is_leaf()
             # should only happen in leaf states, otherwise would have triggered earlier
             logger.warning("Unsuccessful unrolling")
             raise MonteCarloError("unsuccessful unrolling")
 
     @override
-    def get_score(self, path: str, scoring_function):
+    def get_score(self, path: str, timeout: Optional[float], scoring_function):
         self.runner.compile_once(
             self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
             self.advice,
             on_action=self.check_unroll_success,
+            timeout=timeout,
         )
         return scoring_function()

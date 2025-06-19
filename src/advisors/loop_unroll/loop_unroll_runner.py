@@ -46,30 +46,6 @@ def send_instrument_response(f: BinaryIO, response: Optional[Tuple[str, str]]):
         f.flush()
 
 
-def send(f: io.BufferedWriter, value: Union[int, float], spec: log_reader.TensorSpec):
-    """Send the `value` - currently just a scalar - formatted as per `spec`."""
-
-    if spec.element_type == ctypes.c_int64:
-        convert_el_func = int
-        ctype_func = ctypes.c_int64
-    elif spec.element_type == ctypes.c_float:
-        convert_el_func = float
-        ctype_func = ctypes.c_float
-    else:
-        print(spec.element_type, "not supported")
-        assert False
-
-    if isinstance(value, list):
-        to_send = (ctype_func * len(value))(*[convert_el_func(el) for el in value])
-    else:
-        to_send = ctype_func(convert_el_func(value))
-
-    assert f.write(bytes(to_send)) == ctypes.sizeof(spec.element_type) * math.prod(
-        spec.shape
-    )
-    f.flush()
-
-
 @dataclasses.dataclass(frozen=True)
 class UnrollFactorResult:
     factor: int
@@ -257,7 +233,7 @@ class LoopUnrollCompilerCommunicator(CompilerCommunicator):
                     if on_heuristic:
                         on_heuristic(heuristic)
 
-                    send(
+                    log_reader.send(
                         tc,
                         advice(tensor_values, heuristic),
                         advice_spec,

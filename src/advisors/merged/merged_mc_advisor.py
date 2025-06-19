@@ -30,8 +30,8 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             "-inliner-interactive-include-default",
             # "-debug-only=inline,inline-ml",
             "-enable-ml-inliner=release",
-            f"-inliner-interactive-channel-base={self.inline_advisor.filename}.channel-basename",
-            f"--mlgo-loop-unroll-interactive-channel-base={self.loop_unroll_advisor.filename}.channel-basename",
+            f"-inliner-interactive-channel-base={self.inline_advisor.filename}",
+            f"--mlgo-loop-unroll-interactive-channel-base={self.loop_unroll_advisor.filename}",
             "--mlgo-loop-unroll-advisor-mode=development",
             "-debug-only=loop-unroll-development-advisor,loop-unroll,inline,inline-ml",
         ]
@@ -96,30 +96,6 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             raise MonteCarloError("unsuccessful unrolling")
 
     @override
-    def get_initial_tree(self, path: str):
-        def build_initial_path(
-            tv: list[log_reader.TensorValue] = [], heuristic=None
-        ) -> Any:
-            assert self.current
-            default_decision = self.get_default_decision(tv, heuristic)
-            child = self.current.add_child(default_decision, 1.0, 1.0, 1)
-            self.current = child
-            return self.wrap_advice(default_decision, heuristic is None)
-
-        self.root.score = 1.0
-        self.root.speedup_sum = 1.0
-        self.root.visits = 1
-
-        self.runner.compile_once(
-            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
-            build_initial_path,
-        )
-        assert self.current
-        self.default_path = self.current.decisions
-        self.all_runs.append((self.default_path[:], 1.0))
-        self.max_speedup_after_n_iterations.append(1.0)
-
-    @override
     def advice(self, tv, heuristic) -> Any:
         assert self.current
         if self.current.visits == 0:
@@ -134,9 +110,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         return self.wrap_advice(decision, heuristic is None)
 
     @override
-    def wrap_advice(
-        self, advice: bool | int, inline: bool = True
-    ) -> bool | list[float]:
+    def wrap_advice(self, advice: bool | int, inline: bool = True) -> bool | int:
         if inline:
             return advice
         else:
