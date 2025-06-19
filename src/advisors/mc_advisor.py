@@ -208,8 +208,8 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         )  # average speedup
 
         if len(self.current.decisions) == len(
-            self.default_path
-        ):  # if we have as many decisions as the default path _in_ the node, then we have reached the bottom of the tree
+            self.current_path
+        ):  # if we have as many decisions as the current path _in_ the node, then we have reached the bottom of the tree
             self.set_state_as_fully_explored(self.current)
 
     def get_max_state(self) -> State:
