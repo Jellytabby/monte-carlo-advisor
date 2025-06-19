@@ -92,6 +92,11 @@ def parse_args_and_run():
         type=float,
         help="Timeout for llc and opt processes",
     )
+    parser.add_argument(
+        "--loop-unroll-advisor-model",
+        type=str,
+        help="Model to use to guide the unroll advisor",
+    )
 
     args = parser.parse_args()
     main(args)
@@ -131,11 +136,11 @@ def main(args):
 
     match (args.inline_advisor, args.loop_unroll_advisor):
         case (True, True):
-            advisor = MergedMonteCarloAdvisor(input_name)
+            advisor = MergedMonteCarloAdvisor(input_name, unroll_model_path=args.loop_unroll_advisor_model)
         case (True, False):
             advisor = inline_mc_advisor.InlineMonteCarloAdvisor(input_name)
         case (False, True):
-            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(input_name)
+            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(input_name, model_path=args.loop_unroll_advisor_model)
         case _:
             raise Exception(
                 "You need to specify at least one advisor. See '--help' for more information."

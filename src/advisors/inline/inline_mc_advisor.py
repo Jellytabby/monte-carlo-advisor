@@ -31,7 +31,7 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             f"-inliner-interactive-channel-base={self.filename}",
         ]
 
-    def get_rollout_decision(self) -> bool:
+    def get_rollout_decision(self, tv) -> bool:
         choice = random.random()
         return True if choice >= 0.5 else False
 
@@ -54,7 +54,7 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
 
     def get_next_state(self, state: State[bool]) -> State[bool]:
         if state.is_leaf():
-            choice = self.get_rollout_decision()
+            choice = self.get_rollout_decision(tv)
             return state.add_child(choice)
         elif len(state.children) == 2:
             return max(

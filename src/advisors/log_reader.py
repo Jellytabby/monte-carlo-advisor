@@ -9,6 +9,7 @@ import io
 import json
 import math
 import sys
+import numpy as np
 from typing import List, Optional, Union
 
 _element_types = {
@@ -82,6 +83,15 @@ class TensorValue:
 
     def spec(self) -> TensorSpec:
         return self._spec
+
+    def to_numpy(self) -> np.ndarray:
+        # TODO our unroll model currently expects only signed int inputs -
+        # interpret unsigned ints as signed ones for now
+        el_ty = self._spec.element_type
+        if self._spec.element_type == ctypes.c_ulong:
+            el_ty = ctypes.c_long
+        return np.frombuffer(
+            self._buffer, dtype=el_ty, count=self._len)
 
     def __len__(self) -> int:
         return self._len

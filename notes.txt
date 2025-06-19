@@ -1,0 +1,41 @@
+Next steps:
+[✓] add median_runtime rather than one time run result
+[✓] adding unrolling
+    [✓] comparing to O3
+        [✓] starting state for tree based on O3 
+            [✓] check inline advisor for default options
+        [✓] plots of the optimization stages
+            [✓] rt of O3 vs rt of MC at each choice
+[ ] pinning threads to a select core (OpenMP, idk ask ivan)
+- bigger benchmark
+    [ ] polybench
+    - xsbench
+    - lulesh
+- how many loops/function/how big program affects time to explore tree
+    - program size vs tree size 
+- add autotune attributes
+    - existing passes to extract functions -> search for `llvm-extract` in llvm codebase
+- independent loops based on features
+
+Notes for theresa:
+    annoying: 
+        - your program freezing and having to hunt down which pipe swalloed the error explaining what happened :(
+        - deadlocks :(
+
+
+
+If you have all children -> UCT
+If you don't -> random unvisited child -> leads to visiting all children
+
+
+
+The max gets changed in the following ways:
+    wanted:
+        - the leaf node we just visited is the new max value, so we set max_node to it and take its score value
+    unwanted:
+        - max_node is a leaf, and we revisit it. the second run results in a lower score, so it overwrites the previous maximum score with a slightly lower score.
+        - max_node is not a leaf, and we visit a child of it that has terrible performance -> drags down max_node's score. 
+
+
+
+
