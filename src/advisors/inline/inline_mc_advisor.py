@@ -6,6 +6,7 @@ from math import sqrt
 from typing import Optional, final
 
 from advisors.inline import inline_runner
+from advisors.log_reader import TensorValue
 from advisors.mc_advisor import MonteCarloAdvisor, State
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             f"-inliner-interactive-channel-base={self.filename}",
         ]
 
-    def get_rollout_decision(self, tv) -> bool:
+    def get_rollout_decision(self, tv=None) -> bool:
         choice = random.random()
         return True if choice >= 0.5 else False
 
@@ -52,9 +53,11 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             else:
                 return
 
-    def get_next_state(self, state: State[bool]) -> State[bool]:
+    def get_next_state(
+        self, state: State[bool], tv: Optional[list[TensorValue]]
+    ) -> State[bool]:
         if state.is_leaf():
-            choice = self.get_rollout_decision(tv)
+            choice = self.get_rollout_decision()
             return state.add_child(choice)
         elif len(state.children) == 2:
             return max(

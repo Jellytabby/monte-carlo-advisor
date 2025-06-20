@@ -19,7 +19,9 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
     def __init__(self, input_name, unroll_model_path, C=sqrt(2)) -> None:
         super().__init__(input_name, C)
         self.inline_advisor = InlineMonteCarloAdvisor(input_name)
-        self.loop_unroll_advisor = LoopUnrollMonteCarloAdvisor(input_name, unroll_model_path)
+        self.loop_unroll_advisor = LoopUnrollMonteCarloAdvisor(
+            input_name, unroll_model_path
+        )
         self.runner = MergedCompilerCommunicator(input_name, True)
 
     def opt_args(self) -> list[str]:
@@ -37,7 +39,9 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             "-debug-only=loop-unroll-development-advisor,loop-unroll,inline,inline-ml",
         ]
 
-    def get_next_state(self,tv, state: State[bool | int], advisor_type: str = "") -> State:
+    def get_next_state(
+        self, state: State[bool | int], tv, advisor_type: str = ""
+    ) -> State:
         if state.is_leaf():
             choice = self.get_rollout_decision(tv, advisor_type)
             return state.add_child(choice)
@@ -46,16 +50,16 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         )  # if we have an inlining decision, we expect the children to be inline == bool decision states
         match advisor_type:
             case utils.INLINE:
-                return self.inline_advisor.get_next_state(state)
+                return self.inline_advisor.get_next_state(state, tv)
             case utils.LOOP_UNROLL:
-                return self.loop_unroll_advisor.get_next_state(state)
+                return self.loop_unroll_advisor.get_next_state(state, tv)
             case _:
                 raise UnknownAdvisorError()
 
-    def get_rollout_decision(self,tv, advisor_type: str = "") -> bool | int:
+    def get_rollout_decision(self, tv, advisor_type: str = "") -> bool | int:
         match advisor_type:
             case utils.INLINE:
-                return self.inline_advisor.get_rollout_decision(tv)
+                return self.inline_advisor.get_rollout_decision()
             case utils.LOOP_UNROLL:
                 return self.loop_unroll_advisor.get_rollout_decision(tv)
             case _:
@@ -116,7 +120,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             self.in_rollout = True
             decision = self.get_rollout_decision(tv, advisor_type)
         else:
-            next = self.get_next_state(tv, self.current, advisor_type)
+            next = self.get_next_state(self.current, tv, advisor_type)
             self.current = next
             decision = next.decisions[-1]
         self.current_path.append(decision)

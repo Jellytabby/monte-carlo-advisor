@@ -1,11 +1,11 @@
 import logging
 import random
-import tempfile
+from math import sqrt
+from typing import Optional, final
+
+import numpy as np
 import tensorflow as tf
 from ai_edge_litert.interpreter import Interpreter
-from math import sqrt
-from typing import final, Optional, List
-
 from typing_extensions import override
 
 from advisors.loop_unroll import loop_unroll_runner
@@ -17,14 +17,16 @@ logger = logging.getLogger(__name__)
 
 @final
 class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
-    def __init__(self, input_name: str, model_path: Optional[str] = None, C: float = sqrt(2)) -> None:
+    def __init__(
+        self, input_name: str, model_path: Optional[str] = None, C: float = sqrt(2)
+    ) -> None:
         super().__init__(input_name, C)
         self.runner: loop_unroll_runner.LoopUnrollCompilerCommunicator = (
             loop_unroll_runner.LoopUnrollCompilerCommunicator(input_name, True)
         )
         self.filename = self.runner.channel_base
 
-        self.MAX_UNROLL_FACTOR = 5
+        self.MAX_UNROLL_FACTOR = 32
 
         if model_path is not None:
             self.interpreter = Interpreter(model_path=model_path)
@@ -56,17 +58,26 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     def has_model(self) -> bool:
         return self.interpreter is not None and self.infer_speedups is not None
 
-    def get_model_predictions(self, tv) -> Optional[List[float]]:
+    def get_model_predictions(self, tv) -> Optional[list[float]]:
         if not self.has_model():
             logger.debug(f"No model to use")
             return None
-        input_dict = {t.spec().name: tf.expand_dims(tf.convert_to_tensor(t.to_numpy()), axis=0) for t in tv}
+        input_dict = {
+            t.spec().name: tf.expand_dims(tf.convert_to_tensor(t.to_numpy()), axis=0)
+            for t in tv
+        }
         res = self.infer_speedups(**input_dict)
-        res = res['unrolling_decision'][0]
+        res = res["unrolling_decision"][0]
         logger.debug(f"Got unroll model output: {res}")
         return res
 
     def get_rollout_decision(self, tv) -> int:
+        model_prediction = self.get_model_predictions(tv)
+        if model_prediction is not None and len(model_prediction) > 0:
+            decision = int(np.argmax(model_prediction[: self.MAX_UNROLL_FACTOR])) + 2
+
+            logger.info(f"Model unrolling decision: {decision}")
+            return decision
         return random.randint(1, self.MAX_UNROLL_FACTOR)
 
     def get_default_decision(
@@ -95,12 +106,10 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             else:
                 return
 
-    def get_next_state(self, tv, state: State[int]) -> State[int]:
-        res = self.get_model_predictions(tv)
+    def get_next_state(self, state: State[int], tv) -> State[int]:
         # TODO do something with these
-
         if state.is_leaf():
-            choice = self.get_rollout_decision()
+            choice = self.get_rollout_decision(tv)
             return state.add_child(choice)
         if len(state.children) == self.MAX_UNROLL_FACTOR:
             return max(

@@ -113,7 +113,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         input_name: str,
         C: float = sqrt(2),
     ) -> None:
-        # self.runner: CompilerCommunicator
+        self.runner: CompilerCommunicator
         self.C = C
         self.root = State[D]()
         self.current = self.root
@@ -134,10 +134,12 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         ...
 
     @abstractmethod
-    def get_rollout_decision(self) -> D: ...
+    def get_rollout_decision(self, tv: Optional[list[log_reader.TensorValue]]) -> D: ...
 
     @abstractmethod
-    def get_next_state(self, state: State[D]) -> State: ...
+    def get_next_state(
+        self, state: State[D], tv: Optional[list[log_reader.TensorValue]]
+    ) -> State: ...
 
     @abstractmethod
     def get_default_decision(
@@ -177,13 +179,15 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.all_runs.append((self.default_path[:], 1.0))
         self.max_speedup_after_n_iterations.append(1.0)
 
-    def advice(self, advisor_type: str, tv, heuristic) -> Any:
+    def advice(
+        self, advisor_type: str, tv: list[log_reader.TensorValue], heuristic
+    ) -> Any:
         assert self.current
         if self.current.visits == 0:
             self.in_rollout = True
-            decision = self.get_rollout_decision()
+            decision = self.get_rollout_decision(tv)
         else:
-            next = self.get_next_state(self.current)
+            next = self.get_next_state(self.current, tv)
             assert next
             self.current = next
             decision = next.decisions[-1]
@@ -296,6 +300,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             except KeyboardInterrupt as k:
                 logger.error(f"Received keyboard interrupt {k}")
                 break
+            except BaseException as e:
+                print(f"JSBNadbjaskjbd and {e}")
+                raise e
             # logger.debug(self)
         logger.info(self)
         logger.info(f"Highest scoring decisions: {self.get_max_run()}")
