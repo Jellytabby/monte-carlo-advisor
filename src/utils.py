@@ -17,8 +17,19 @@ LOOP_UNROLL_ERROR_CODE = -999
 TIMEOUT_ERROR_CODE = -111
 
 
+INLINE = "inline"
+LOOP_UNROLL = "loop_unroll"
+
+
 class MonteCarloError(Exception):
     pass
+
+
+class UnknownAdvisorError(Exception):
+    def __init__(self) -> None:
+        super().__init__(
+            f"Unknown advisor type. Currently supported are {INLINE} and {LOOP_UNROLL}"
+        )
 
 
 def basename(file: str) -> str:

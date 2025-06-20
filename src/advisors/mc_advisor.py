@@ -113,7 +113,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         input_name: str,
         C: float = sqrt(2),
     ) -> None:
-        self.runner: CompilerCommunicator
+        # self.runner: CompilerCommunicator
         self.C = C
         self.root = State[D]()
         self.current = self.root
@@ -121,7 +121,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.default_path: list[D]
         self.current_path: list[D] = []
         self.all_runs: list[tuple[list[D], float]] = []
-        self.invalid_paths: set[tuple[D]] = set()
+        self.invalid_paths: set = set()
         self.max_speedup_after_n_iterations: list[float] = []
         self.filename = input_name
 
@@ -140,24 +140,29 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def get_next_state(self, state: State[D]) -> State: ...
 
     @abstractmethod
-    def get_default_decision(self, tv, heuristic) -> D: ...
+    def get_default_decision(
+        self, advisor_type: str, tv, heuristic: Optional[D]
+    ) -> D: ...
 
     @abstractmethod
     def set_state_as_fully_explored(self, state: State[D]): ...
 
-    def wrap_advice(self, advice: D) -> Any:
+    def wrap_advice(self, advisor_type: str, advice: D) -> Any:
         "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
         return advice
 
     def get_initial_tree(self, path: str):
         def build_initial_path(
-            tv: list[log_reader.TensorValue] = [], heuristic=None
+            advisor_type: str, tv: list[log_reader.TensorValue] = [], heuristic=None
         ) -> Any:
             assert self.current
-            default_decision = self.get_default_decision(tv, heuristic)
+            default_decision = self.get_default_decision(advisor_type, tv, heuristic)
             child = self.current.add_child(default_decision, 1.0, 1.0, 1)
             self.current = child
-            return self.wrap_advice(default_decision)
+            return self.wrap_advice(
+                advisor_type,
+                default_decision,
+            )
 
         self.root.score = 1.0
         self.root.speedup_sum = 1.0
@@ -172,7 +177,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.all_runs.append((self.default_path[:], 1.0))
         self.max_speedup_after_n_iterations.append(1.0)
 
-    def advice(self, tv, heuristic) -> Any:
+    def advice(self, advisor_type: str, tv, heuristic) -> Any:
         assert self.current
         if self.current.visits == 0:
             self.in_rollout = True
@@ -184,7 +189,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             decision = next.decisions[-1]
         self.current_path.append(decision)
         logger.debug(f"Current path: {self.current_path}")
-        return self.wrap_advice(decision)
+        return self.wrap_advice(advisor_type, decision)
 
     def uct(self, state: State) -> float:
         parent = state.parent
@@ -264,6 +269,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             except (
                 utils.MonteCarloError
             ):  # should happen if we have an invalid loop unroll while not in rollout
+                assert self.current
                 self.mark_state_as_invalid(self.current, utils.LOOP_UNROLL_ERROR_CODE)
             except (
                 subprocess.TimeoutExpired,

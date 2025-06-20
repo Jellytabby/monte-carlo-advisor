@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import random
 from math import sqrt
-from typing import final
+from typing import Optional, final
 
 from advisors.inline import inline_runner
 from advisors.mc_advisor import MonteCarloAdvisor, State
@@ -35,7 +35,9 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
         choice = random.random()
         return True if choice >= 0.5 else False
 
-    def get_default_decision(self, tv, heuristic) -> bool:
+    def get_default_decision(
+        self, advisor_type: str, tv, heuristic: Optional[bool]
+    ) -> bool:
         return bool(tv[-1][0])
 
     def set_state_as_fully_explored(self, state: State[bool]):

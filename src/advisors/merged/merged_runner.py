@@ -18,7 +18,9 @@ import subprocess
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union, final
+
+from typing_extensions import override
 
 import utils
 from advisors import log_reader
@@ -29,93 +31,62 @@ from advisors.mc_runner import CompilerCommunicator
 logger = logging.getLogger(__name__)
 
 
+@final
 class MergedCompilerCommunicator(CompilerCommunicator):
-    def __init__(
-        self,
-        input_name: str,
-        debug,
-    ):
-        self.input_name = input_name
-        self.debug = debug
+    def __init__(self, input_name: str, debug):
+        super().__init__(input_name, debug)
+        # self.input_name = input_name
+        # self.debug = debug
+        self.stop_event: threading.Event = threading.Event()
+        self.inline_comm = InlineCompilerCommunicator(
+            input_name, False, self.stop_event
+        )
+        self.loop_comm = LoopUnrollCompilerCommunicator(input_name, False)
 
-    def compile_once(
+    @override
+    def clean_up_pipes(self):
+        self.inline_comm.clean_up_pipes()
+        self.loop_comm.clean_up_pipes()
+
+    def communicate_with_proc(
         self,
-        process_and_args: list[str],
-        advice: Callable[[List[log_reader.TensorValue], int], Union[int, float, list]],
+        compiler_proc: subprocess.Popen[bytes],
+        advice: Callable[[str, list[log_reader.TensorValue], Optional[int]], int],
         on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
-        timeout: Optional[float] = 10,
+        timeout: Optional[float] = None,
     ):
-        self.process_and_args = process_and_args
-        self.advice = advice
-        self.on_features = on_features
-        self.on_heuristic = on_heuristic
-        self.on_action = on_action
-        self.stop_event: threading.Event = threading.Event()
+        self.stop_event.clear()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            fut_inline = executor.submit(
+                self.inline_comm.communicate_with_proc,
+                compiler_proc,
+                advice,
+                None,
+                None,
+                None,
+                timeout,
+            )
+            fut_loop = executor.submit(
+                self.loop_comm.communicate_with_proc,
+                compiler_proc,
+                advice,
+                None,
+                None,
+                on_action,
+                timeout,
+            )
 
-        # typechecker shenanigans
-        compiler_proc = None
-        inline_comm = None
-        loop_comm = None
-        with tempfile.TemporaryFile("b+x") as error_buffer:
-            try:
-                logger.debug(f"Launching compiler {' '.join(process_and_args)}")
-                compiler_proc = subprocess.Popen(
-                    process_and_args,
-                    stderr=subprocess.DEVNULL if not self.debug else error_buffer,
-                    stdout=subprocess.PIPE,
-                    stdin=subprocess.PIPE,
-                )
-                logger.debug(f"Sending module")
-
-                inline_comm = InlineCompilerCommunicator(
-                    self.input_name, True, self.stop_event
-                )
-                loop_comm = LoopUnrollCompilerCommunicator(self.input_name, True)
-
-                with ThreadPoolExecutor(max_workers=2) as executor:
-                    fut_inline = executor.submit(
-                        inline_comm.communicate_with_proc,
-                        compiler_proc,
-                        advice,
-                        None,
-                        None,
-                        timeout,
-                    )
-                    fut_loop = executor.submit(
-                        loop_comm.communicate_with_proc,
-                        compiler_proc,
-                        advice,
-                        None,
-                        None,
-                        self.on_action,
-                        timeout,
-                    )
-
-                    for fut in as_completed([fut_inline, fut_loop]):
-                        try:
-                            fut.result()
-                        except TimeoutError as t:
-                            if fut_inline.done() and fut_loop.done():
-                                logger.warning(
-                                    f"Timeout: opt timed out after {timeout} seconds"
-                                )
-                                raise t
-                        except utils.MonteCarloError as e:
-                            self.stop_event.set()
-                            raise e
-
-            finally:
-                assert compiler_proc and inline_comm and loop_comm
-                inline_comm.clean_up_pipes()
-                loop_comm.clean_up_pipes()
-                if compiler_proc.returncode is None:
-                    utils.terminate(compiler_proc)
-                else:
-                    status = utils.clean_up_process(compiler_proc, error_buffer)
-                    if (
-                        status != 0 and status != -15
-                    ):  # -15 is us terminating the process
-                        logger.error(f"Process failed with error code: {status}")
-                        exit(status)
+            for fut in as_completed([fut_inline, fut_loop]):
+                try:
+                    fut.result()
+                except TimeoutError as t:
+                    if fut_inline.done() and fut_loop.done():
+                        logger.warning(
+                            f"Timeout: opt timed out after {timeout} seconds"
+                        )
+                        raise t
+                except utils.MonteCarloError as e:
+                    self.stop_event.set()
+                    raise e

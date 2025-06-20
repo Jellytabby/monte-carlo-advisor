@@ -4,12 +4,13 @@ from typing import Any, Optional
 
 from typing_extensions import override
 
+import utils
 from advisors import log_reader
 from advisors.inline.inline_mc_advisor import InlineMonteCarloAdvisor
 from advisors.loop_unroll.loop_unroll_mc_advisor import LoopUnrollMonteCarloAdvisor
 from advisors.mc_advisor import MonteCarloAdvisor, State
 from advisors.merged.merged_runner import MergedCompilerCommunicator
-from utils import MonteCarloError
+from utils import INLINE, LOOP_UNROLL, MonteCarloError, UnknownAdvisorError
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         super().__init__(input_name, C)
         self.inline_advisor = InlineMonteCarloAdvisor(input_name)
         self.loop_unroll_advisor = LoopUnrollMonteCarloAdvisor(input_name)
-        self.runner = MergedCompilerCommunicator(input_name, True)
+        self.runner = MergedCompilerCommunicator(input_name, False)
 
     def opt_args(self) -> list[str]:
         return [
@@ -36,29 +37,42 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             "-debug-only=loop-unroll-development-advisor,loop-unroll,inline,inline-ml",
         ]
 
-    def get_next_state(self, state: State[bool | int], inline: bool = True) -> State:
+    def get_next_state(self, state: State[bool | int], advisor_type: str = "") -> State:
         if state.is_leaf():
-            choice = self.get_rollout_decision(inline)
+            choice = self.get_rollout_decision(advisor_type)
             return state.add_child(choice)
-        assert (
-            type(state.children[0].decisions[-1]) is bool
-        ) == inline  # if we have an inlining decision, we expect the children to be inline == bool decision states
-        if inline:
-            return self.inline_advisor.get_next_state(state)
-        else:
-            return self.loop_unroll_advisor.get_next_state(state)
+        assert (type(state.children[0].decisions[-1]) is bool) == (
+            advisor_type == utils.INLINE
+        )  # if we have an inlining decision, we expect the children to be inline == bool decision states
+        match advisor_type:
+            case utils.INLINE:
+                return self.inline_advisor.get_next_state(state)
+            case utils.LOOP_UNROLL:
+                return self.loop_unroll_advisor.get_next_state(state)
+            case _:
+                raise UnknownAdvisorError()
 
-    def get_rollout_decision(self, inline: bool = True) -> bool | int:
-        if inline:
-            return self.inline_advisor.get_rollout_decision()
-        else:
-            return self.loop_unroll_advisor.get_rollout_decision()
+    def get_rollout_decision(self, advisor_type: str = "") -> bool | int:
+        match advisor_type:
+            case utils.INLINE:
+                return self.inline_advisor.get_rollout_decision()
+            case utils.LOOP_UNROLL:
+                return self.loop_unroll_advisor.get_rollout_decision()
+            case _:
+                raise UnknownAdvisorError()
 
-    def get_default_decision(self, tv, heuristic) -> bool | int:
-        if heuristic is None:
-            return self.inline_advisor.get_default_decision(tv, heuristic)
-        else:
-            return self.loop_unroll_advisor.get_default_decision(tv, heuristic)
+    def get_default_decision(
+        self, advisor_type: str, tv: list[log_reader.TensorValue], heuristic
+    ) -> bool | int:
+        match advisor_type:
+            case utils.INLINE:
+                return self.inline_advisor.get_default_decision(advisor_type, tv, None)
+            case utils.LOOP_UNROLL:
+                return self.loop_unroll_advisor.get_default_decision(
+                    advisor_type, tv, heuristic
+                )
+            case _:
+                raise UnknownAdvisorError()
 
     def set_state_as_fully_explored(self, state: State[int]):
         state.subtree_is_fully_explored = True
@@ -96,25 +110,28 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             raise MonteCarloError("unsuccessful unrolling")
 
     @override
-    def advice(self, tv, heuristic) -> Any:
+    def advice(self, advisor_type: str, tv, heuristic) -> Any:
         assert self.current
         if self.current.visits == 0:
             self.in_rollout = True
-            decision = self.get_rollout_decision(heuristic is None)
+            decision = self.get_rollout_decision(advisor_type)
         else:
-            next = self.get_next_state(self.current, heuristic is None)
+            next = self.get_next_state(self.current, advisor_type)
             self.current = next
             decision = next.decisions[-1]
         self.current_path.append(decision)
         logger.debug(f"Current path: {self.current_path}")
-        return self.wrap_advice(decision, heuristic is None)
+        return self.wrap_advice(advisor_type, decision)
 
     @override
-    def wrap_advice(self, advice: bool | int, inline: bool = True) -> bool | int:
-        if inline:
-            return advice
-        else:
-            return self.loop_unroll_advisor.wrap_advice(advice)
+    def wrap_advice(self, advisor_type: str, advice: bool | int) -> bool | int:
+        match advisor_type:
+            case utils.INLINE:
+                return advice
+            case utils.LOOP_UNROLL:
+                return self.loop_unroll_advisor.wrap_advice(advisor_type, advice)
+            case _:
+                raise UnknownAdvisorError()
 
     @override
     def get_score(self, path: str, timeout: Optional[float], scoring_function):

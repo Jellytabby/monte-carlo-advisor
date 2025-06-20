@@ -2,7 +2,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, Union
 
 import utils
@@ -11,7 +11,7 @@ from advisors import log_reader
 logger = logging.getLogger(__name__)
 
 
-class CompilerCommunicator:
+class CompilerCommunicator(ABC):
     def __init__(self, input_name, debug):
         self.channel_base: str = input_name + type(self).__name__
         self.to_compiler = self.channel_base + ".in"
@@ -20,10 +20,17 @@ class CompilerCommunicator:
 
     @abstractmethod
     def communicate_with_proc(
-        self, compiler_proc, advice, on_features, on_heuristic, on_action, timeout
+        self,
+        compiler_proc: subprocess.Popen[bytes],
+        advice: Callable[[str, list[log_reader.TensorValue], Optional[int]], int],
+        on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
+        on_heuristic: Optional[Callable[[int], Any]] = None,
+        on_action: Optional[Callable[[bool], Any]] = None,
+        timeout: Optional[float] = None,
     ): ...
 
     def clean_up_pipes(self):
+        logger.debug(f"Cleaning up pipes for {type(self).__name__} ")
         try:
             os.unlink(self.to_compiler)
         except FileNotFoundError:
@@ -36,7 +43,7 @@ class CompilerCommunicator:
     def compile_once(
         self,
         process_and_args: list[str],
-        advice: Callable[[list[log_reader.TensorValue], int], Union[int, float, list]],
+        advice: Callable[[str, list[log_reader.TensorValue], Optional[int]], int],
         on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,

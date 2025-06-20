@@ -39,13 +39,16 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         return factor
 
     @override
-    def wrap_advice(self, advice: int) -> int:
+    def wrap_advice(self, advisor_type: str, advice: int) -> int:
         return self.make_response_for_factor(advice)
 
     def get_rollout_decision(self) -> int:
         return random.randint(1, self.MAX_UNROLL_FACTOR)
 
-    def get_default_decision(self, tv, heuristic: int) -> int:
+    def get_default_decision(
+        self, advisor_type: str, tv, heuristic: Optional[int]
+    ) -> int:
+        assert heuristic
         match heuristic:
             case -1:  # compiler returns -1 when no unrolling
                 return 1

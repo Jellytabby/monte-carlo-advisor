@@ -25,8 +25,9 @@ _element_types = {
 }
 
 
-def send(f: io.BufferedWriter, value: Union[int, float], spec: "TensorSpec"):
+def send(f: io.BufferedWriter, value: Union[int, float], spec: Optional["TensorSpec"]):
     """Send the `value` - currently just a scalar - formatted as per `spec`."""
+    assert spec
 
     if spec.element_type == ctypes.c_int64:
         convert_el_func = int
@@ -115,7 +116,7 @@ def read_header(f: io.BufferedReader):
 
 def read_one_observation(
     context: Optional[str],
-    event_str: str,
+    event_str: bytes,
     f: io.BufferedReader,
     tensor_specs: List[TensorSpec],
     score_spec: Optional[TensorSpec],

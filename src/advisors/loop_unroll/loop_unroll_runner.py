@@ -24,7 +24,9 @@ import subprocess
 import sys
 import time
 from time import sleep
-from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union, final
+
+from typing_extensions import override
 
 import utils
 from advisors import log_reader
@@ -67,6 +69,7 @@ class CompilationResult:
     num_decisions: int
 
 
+@final
 class LoopUnrollCompilerCommunicator(CompilerCommunicator):
     def __init__(
         self,
@@ -129,7 +132,7 @@ class LoopUnrollCompilerCommunicator(CompilerCommunicator):
     def communicate_with_proc(
         self,
         compiler_proc: subprocess.Popen[bytes],
-        advice: Callable[[List[log_reader.TensorValue], int], Union[int, float, list]],
+        advice: Callable[[str, list[log_reader.TensorValue], int], int],
         on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
         on_heuristic: Optional[Callable[[int], Any]] = None,
         on_action: Optional[Callable[[bool], Any]] = None,
@@ -235,7 +238,7 @@ class LoopUnrollCompilerCommunicator(CompilerCommunicator):
 
                     log_reader.send(
                         tc,
-                        advice(tensor_values, heuristic),
+                        advice(utils.LOOP_UNROLL, tensor_values, heuristic),
                         advice_spec,
                     )
 
@@ -247,14 +250,9 @@ class LoopUnrollCompilerCommunicator(CompilerCommunicator):
                             # utils.terminate(
                             #     compiler_proc
                             # )  # do want to terminate, since action only raises exception when we have path we dont want to continue anymore -> no need to let inline continue, but termination is handled in corresponding compile_once function
-                            os.unlink(self.to_compiler)
-                            os.unlink(self.from_compiler)
                             raise e
 
                     send_instrument_response(tc, None)
-
                     set_nonblocking(fc)
 
                 set_blocking(fc)
-            os.unlink(self.to_compiler)
-            os.unlink(self.from_compiler)

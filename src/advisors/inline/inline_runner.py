@@ -19,7 +19,7 @@ import subprocess
 import time
 from threading import Event
 from time import sleep
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, final
 
 import utils
 from advisors import log_reader
@@ -28,6 +28,7 @@ from advisors.mc_runner import CompilerCommunicator
 logger = logging.getLogger(__name__)
 
 
+@final
 class InlineCompilerCommunicator(CompilerCommunicator):
     def __init__(self, input_name: str, debug, event=None):
         super().__init__(input_name, debug)
@@ -36,10 +37,10 @@ class InlineCompilerCommunicator(CompilerCommunicator):
     def communicate_with_proc(
         self,
         compiler_proc: subprocess.Popen[bytes],
-        advice: Callable[[list[log_reader.TensorValue], int], Union[int, float, list]],
-        on_features=None,
-        on_heuristic=None,
-        on_action=None,
+        advice: Callable[[str, list[log_reader.TensorValue], Optional[int]], int],
+        on_features: Optional[Callable[[list[log_reader.TensorValue]], Any]] = None,
+        on_heuristic: Optional[Callable[[int], Any]] = None,
+        on_action: Optional[Callable[[bool], Any]] = None,
         timeout: Optional[float] = None,
     ):
 
@@ -50,15 +51,6 @@ class InlineCompilerCommunicator(CompilerCommunicator):
             os.set_blocking(pipe.fileno(), True)
 
         logger.debug(f"Opening pipes {self.to_compiler} and {self.from_compiler}")
-
-        try:
-            os.unlink(self.to_compiler)
-        except FileNotFoundError:
-            pass
-        try:
-            os.unlink(self.from_compiler)
-        except FileNotFoundError:
-            pass
 
         os.mkfifo(self.to_compiler, 0o666)
         os.mkfifo(self.from_compiler, 0o666)
@@ -161,13 +153,10 @@ class InlineCompilerCommunicator(CompilerCommunicator):
                         # logger.debug(log_reader.string_tensor_value(fv))
                         tensor_values.append(fv)
                     if on_features is not None:
-                        on_features(tc, fc)
-                    log_reader.send(tc, advice(tensor_values, None), advice_spec)
+                        on_features(tensor_values)
+                    log_reader.send(
+                        tc, advice(utils.INLINE, tensor_values, None), advice_spec
+                    )
                     if on_heuristic is not None:
-                        on_heuristic(tc, fc)
-
+                        on_heuristic(None)
                 set_blocking(fc)
-
-        set_blocking(compiler_proc.stdout)
-        os.unlink(self.to_compiler)
-        os.unlink(self.from_compiler)
