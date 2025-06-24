@@ -22,6 +22,7 @@ import math
 import os
 import subprocess
 import sys
+import threading
 import time
 from time import sleep
 from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Union, final
@@ -152,6 +153,7 @@ class LoopUnrollCompilerCommunicator(CompilerCommunicator):
         set_nonblocking(compiler_proc.stdout)
 
         logger.debug(f"Starting communication")
+        # threading.current_thread().name = "loop-unroll-communicator"
         start = time.time()
 
         with io.BufferedWriter(io.FileIO(self.to_compiler, "w+b")) as tc:

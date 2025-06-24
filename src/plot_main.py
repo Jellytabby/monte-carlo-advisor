@@ -9,7 +9,7 @@ from advisors.mc_advisor import MonteCarloAdvisor
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
-def plot_speedup(advisor: MonteCarloAdvisor, name: str):
+def plot_speedup(advisor: MonteCarloAdvisor, name: str, plot_dir: str):
     speedup = advisor.max_speedup_after_n_iterations
     assert speedup[0] == 1.0
     iterations = list(range(len(speedup)))
@@ -27,15 +27,15 @@ def plot_speedup(advisor: MonteCarloAdvisor, name: str):
     plt.xticks(ticks)  # show one tick per iteration
     plt.tight_layout()
 
-    os.makedirs(f"plots/{name}", exist_ok=True)
+    os.makedirs(f"{plot_dir}/{name}", exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"plots/{name}/{name}_{ts}.png"
+    fname = f"{plot_dir}/{name}/{name}_{ts}.png"
     plt.savefig(fname)
 
 
-def log_results(advisor: MonteCarloAdvisor, args, start_time, name: str):
+def log_results(advisor: MonteCarloAdvisor, args, start_time, name: str, plot_dir: str):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path_dir = f"plots/{name}/"
+    path_dir = f"{plot_dir}/{name}/"
     os.makedirs(path_dir, exist_ok=True)
     path = f"{path_dir}/{name}_{ts}.log"
     with open(path, "w+") as f:
@@ -47,8 +47,6 @@ def log_results(advisor: MonteCarloAdvisor, args, start_time, name: str):
             f.write(
                 f"{i:<10} {advisor.max_speedup_after_n_iterations[i]:<10.5f} {str(r[0]):<100} {r[1]:<10.5f}\n"
             )
-        f.write(str(advisor)+'\n')
+        f.write(str(advisor) + "\n")
         f.write(f"Best run: {advisor.get_max_run()}\n")
         f.write(f"Best state: {advisor.get_max_state()}\n")
-
-

@@ -70,7 +70,7 @@ def parse_args_and_run():
         "-i",
         "--initial-samples",
         type=int,
-        default=20,
+        default=10,
         help="Number of initial samples the adaptive benchmark generates.",
     )
     parser.add_argument(
@@ -96,6 +96,12 @@ def parse_args_and_run():
         "--loop-unroll-advisor-model",
         type=str,
         help="Model to use to guide the unroll advisor",
+    )
+    parser.add_argument(
+        "--plot-directory",
+        type=str,
+        default="plots",
+        help="Directory to store generated plots and logs in.",
     )
 
     args = parser.parse_args()
@@ -129,6 +135,7 @@ def main(args):
         raise RuntimeError(f"Core {args.core} is out of range")
 
     logger.info(f"Benchmark core is {next_free_core}")
+    logger.info(f"Script started with arguments: {args}")
     input_file = args.input_file
     input_dir = os.path.dirname(input_file)
     input_name = os.path.basename(input_file)
@@ -136,11 +143,15 @@ def main(args):
 
     match (args.inline_advisor, args.loop_unroll_advisor):
         case (True, True):
-            advisor = MergedMonteCarloAdvisor(input_name, unroll_model_path=args.loop_unroll_advisor_model)
+            advisor = MergedMonteCarloAdvisor(
+                input_name, unroll_model_path=args.loop_unroll_advisor_model
+            )
         case (True, False):
             advisor = inline_mc_advisor.InlineMonteCarloAdvisor(input_name)
         case (False, True):
-            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(input_name, model_path=args.loop_unroll_advisor_model)
+            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(
+                input_name, model_path=args.loop_unroll_advisor_model
+            )
         case _:
             raise Exception(
                 "You need to specify at least one advisor. See '--help' for more information."
@@ -170,9 +181,10 @@ def main(args):
             next_free_core,
         ),
     )
-    plot_main.log_results(advisor, args, start, input_name)
-    plot_main.plot_speedup(advisor, input_name)
+    plot_main.log_results(advisor, args, start, input_name, args.plot_directory)
+    plot_main.plot_speedup(advisor, input_name, args.plot_directory)
     del os.environ["INPUT"]  # NOTE: makes no difference apparently?
+    logger.info("Succesfully completed Monte Carlo Advising")
 
 
 def make_clean():

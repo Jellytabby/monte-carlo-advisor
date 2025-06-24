@@ -10,7 +10,7 @@ from typing_extensions import override
 
 from advisors.loop_unroll import loop_unroll_runner
 from advisors.mc_advisor import MonteCarloAdvisor, State
-from utils import MonteCarloError
+from utils import LOOP_UNROLL, MonteCarloError
 
 logger = logging.getLogger(__name__)
 
@@ -71,11 +71,17 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
         logger.debug(f"Got unroll model output: {res}")
         return res
 
-    def get_rollout_decision(self, tv) -> int:
+    def get_rollout_decision(self, tv, heuristic) -> int:
         model_prediction = self.get_model_predictions(tv)
         if model_prediction is not None and len(model_prediction) > 0:
-            decision = int(np.argmax(model_prediction[: self.MAX_UNROLL_FACTOR])) + 2
-
+            truncated_predictions = model_prediction[: self.MAX_UNROLL_FACTOR]
+            decision = int(np.argmax(truncated_predictions)) + 2
+            decision_value = max(truncated_predictions)
+            decision = (
+                decision
+                if decision_value >= 1.0
+                else self.get_default_decision(LOOP_UNROLL, tv, heuristic)
+            )
             logger.info(f"Model unrolling decision: {decision}")
             return decision
         return random.randint(1, self.MAX_UNROLL_FACTOR)
@@ -83,9 +89,9 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     def get_default_decision(
         self, advisor_type: str, tv, heuristic: Optional[int]
     ) -> int:
-        assert heuristic
+        assert heuristic is not None
         match heuristic:
-            case -1:  # compiler returns -1 when no unrolling
+            case -1:  # compiler returns -1 when no opinion
                 return 1
             case 0:
                 return 1  # ngl, not sure if this is even possible
@@ -106,10 +112,10 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             else:
                 return
 
-    def get_next_state(self, state: State[int], tv) -> State[int]:
+    def get_next_state(self, state: State[int], tv, heuristic) -> State[int]:
         # TODO do something with these
         if state.is_leaf():
-            choice = self.get_rollout_decision(tv)
+            choice = self.get_rollout_decision(tv, heuristic)
             return state.add_child(choice)
         if len(state.children) == self.MAX_UNROLL_FACTOR:
             return max(

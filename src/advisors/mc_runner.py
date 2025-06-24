@@ -67,13 +67,14 @@ class CompilerCommunicator(ABC):
 
             finally:
                 assert compiler_proc
-                self.clean_up_pipes()
                 if compiler_proc.returncode is None:
                     utils.terminate(compiler_proc)
+                    self.clean_up_pipes()
                 else:
                     status = utils.clean_up_process(compiler_proc, error_buffer)
+                    self.clean_up_pipes()
                     if (
-                        status != 0 and status != -15
-                    ):  # -15 is us terminating the process
+                        status != 0 and status != -2 and status != -15
+                    ):  # -2 is Ctrl-C and -15 is us terminating the process
                         logger.error(f"Process failed with error code: {status}")
                         exit(status)

@@ -90,3 +90,7 @@ class MergedCompilerCommunicator(CompilerCommunicator):
                 except utils.MonteCarloError as e:
                     self.stop_event.set()
                     raise e
+
+                except BaseException as e:
+                    self.stop_event.set()
+                    raise e

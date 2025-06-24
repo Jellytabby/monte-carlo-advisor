@@ -134,16 +134,24 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         ...
 
     @abstractmethod
-    def get_rollout_decision(self, tv: Optional[list[log_reader.TensorValue]]) -> D: ...
+    def get_rollout_decision(
+        self, tv: list[log_reader.TensorValue], heuristic: Optional[D]
+    ) -> D: ...
 
     @abstractmethod
     def get_next_state(
-        self, state: State[D], tv: Optional[list[log_reader.TensorValue]]
+        self,
+        state: State[D],
+        tv: list[log_reader.TensorValue],
+        heuristic: Optional[D],
     ) -> State: ...
 
     @abstractmethod
     def get_default_decision(
-        self, advisor_type: str, tv, heuristic: Optional[D]
+        self,
+        advisor_type: str,
+        tv: list[log_reader.TensorValue],
+        heuristic: Optional[D],
     ) -> D: ...
 
     @abstractmethod
@@ -185,9 +193,9 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         assert self.current
         if self.current.visits == 0:
             self.in_rollout = True
-            decision = self.get_rollout_decision(tv)
+            decision = self.get_rollout_decision(tv, heuristic)
         else:
-            next = self.get_next_state(self.current, tv)
+            next = self.get_next_state(self.current, tv, heuristic)
             assert next
             self.current = next
             decision = next.decisions[-1]
@@ -301,7 +309,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 logger.error(f"Received keyboard interrupt {k}")
                 break
             except BaseException as e:
-                print(f"JSBNadbjaskjbd and {e}")
+                print(f"Encountered an unhandled exception: {e}")
                 raise e
             # logger.debug(self)
         logger.info(self)

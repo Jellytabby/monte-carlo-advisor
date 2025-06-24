@@ -40,10 +40,14 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         ]
 
     def get_next_state(
-        self, state: State[bool | int], tv, advisor_type: str = ""
+        self,
+        state: State[bool | int],
+        tv: list[log_reader.TensorValue],
+        heuristic: Optional[int],
+        advisor_type: str = "",
     ) -> State:
         if state.is_leaf():
-            choice = self.get_rollout_decision(tv, advisor_type)
+            choice = self.get_rollout_decision(tv, heuristic, advisor_type)
             return state.add_child(choice)
         assert (type(state.children[0].decisions[-1]) is bool) == (
             advisor_type == utils.INLINE
@@ -52,16 +56,21 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
             case utils.INLINE:
                 return self.inline_advisor.get_next_state(state, tv)
             case utils.LOOP_UNROLL:
-                return self.loop_unroll_advisor.get_next_state(state, tv)
+                return self.loop_unroll_advisor.get_next_state(state, tv, heuristic)
             case _:
                 raise UnknownAdvisorError()
 
-    def get_rollout_decision(self, tv, advisor_type: str = "") -> bool | int:
+    def get_rollout_decision(
+        self,
+        tv: list[log_reader.TensorValue],
+        heuristic: Optional[int],
+        advisor_type: str = "",
+    ) -> bool | int:
         match advisor_type:
             case utils.INLINE:
                 return self.inline_advisor.get_rollout_decision()
             case utils.LOOP_UNROLL:
-                return self.loop_unroll_advisor.get_rollout_decision(tv)
+                return self.loop_unroll_advisor.get_rollout_decision(tv, heuristic)
             case _:
                 raise UnknownAdvisorError()
 
@@ -118,9 +127,9 @@ class MergedMonteCarloAdvisor(MonteCarloAdvisor[bool | int]):
         assert self.current
         if self.current.visits == 0:
             self.in_rollout = True
-            decision = self.get_rollout_decision(tv, advisor_type)
+            decision = self.get_rollout_decision(tv, heuristic, advisor_type)
         else:
-            next = self.get_next_state(self.current, tv, advisor_type)
+            next = self.get_next_state(self.current, tv, heuristic, advisor_type)
             self.current = next
             decision = next.decisions[-1]
         self.current_path.append(decision)

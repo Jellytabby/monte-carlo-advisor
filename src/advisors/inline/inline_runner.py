@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import subprocess
+import threading
 import time
 from threading import Event
 from time import sleep
@@ -58,6 +59,7 @@ class InlineCompilerCommunicator(CompilerCommunicator):
         set_nonblocking(compiler_proc.stdout)
 
         logger.debug("Starting communication")
+        # threading.current_thread().name = "Inline-communicator"
         start = time.time()
 
         with io.BufferedWriter(io.FileIO(self.to_compiler, "w+b")) as tc:
@@ -131,8 +133,6 @@ class InlineCompilerCommunicator(CompilerCommunicator):
                             utils.clean_up_process(
                                 compiler_proc
                             )  # cleanup not terminate, because we want loop unroll to finish
-                            os.unlink(self.to_compiler)
-                            os.unlink(self.from_compiler)
                             return
 
                     (
