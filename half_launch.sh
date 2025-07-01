@@ -20,7 +20,8 @@ half=$(( (total + 1) / 2 ))   # first half gets the extra one if odd
 
 RUNS=1000
 # You can tweak this in one place to affect both halves:
-CMD="python3 src/monte_carlo_main.py -lua -ia -r $RUNS -t 120 --plot-directory random_max_32_$RUNS"
+# CMD="python3 src/monte_carlo_main.py -lua -ia -r $RUNS -t 120 --loop-unroll-advisor-model /scr/sophia.herrmann/src/model.tflite --plot-directory model_max_10_$RUNS"
+CMD="python3 src/monte_carlo_main.py -lua -ia -r $RUNS -t 120  --plot-directory random_max_10_$RUNS"
 
 core=8
 

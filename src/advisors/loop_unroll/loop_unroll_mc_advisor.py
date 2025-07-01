@@ -74,7 +74,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     def get_rollout_decision(self, tv, heuristic) -> int:
         model_prediction = self.get_model_predictions(tv)
         if model_prediction is not None and len(model_prediction) > 0:
-            truncated_predictions = model_prediction[: self.MAX_UNROLL_FACTOR]
+            truncated_predictions = model_prediction[: self.MAX_UNROLL_FACTOR - 1]
             decision = int(np.argmax(truncated_predictions)) + 2
             decision_value = max(truncated_predictions)
             decision = (
