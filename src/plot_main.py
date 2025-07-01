@@ -45,8 +45,8 @@ def log_results(advisor: MonteCarloAdvisor, args, start_time, name: str, plot_di
         f.write(f"{'Iteration':<10} {'Max':<10} {'Run':<100} {'Score':<10}\n")
         for i, r in enumerate(advisor.all_runs):
             f.write(
-                f"{i:<10} {advisor.max_speedup_after_n_iterations[i]:<10.5f} {str(r[0]):<100} {r[1]:<10.5f}\n"
+                f"{i:<10} {advisor.max_speedup_after_n_iterations[i]:<10.5f} {str(r[0]) if len(str(r[0])) <= 100 else str(r[0])[:97] + '...':<100} {r[1]:<10.5f}\n"
             )
         f.write(str(advisor) + "\n")
         f.write(f"Best run: {advisor.get_max_run()}\n")
-        f.write(f"Best state: {advisor.get_max_state()}\n")
+        # f.write(f"Best state: {advisor.get_max_state()}\n") #remove because initial path is too deep and causes stack overflow errors

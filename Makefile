@@ -49,7 +49,7 @@ all: $(OUT) $(MODULE_POST_BC)
 
 # — Link final executable —
 $(OUT): $(MODULE_OBJ)
-	$(CC) $(EXTRA_FLAGS) $^ -o $@
+	$(CC) $^ $(EXTRA_FLAGS) -o $@
 
 # — Baseline build & run —
 $(INPUT_DIR)baseline.out: $(MODULE_SRC)
@@ -69,10 +69,9 @@ $(PROF_OBJ): $(PROF_SRC)
 # — Emit LLVM bitcode from loop source —
 mod-pre-mc.bc: $(MODULE_PRE_BC)
 
+# need to remove dead code or else we get compiler errors for missing functions
 $(MODULE_PRE_BC): $(MODULE_SRC)
-	$(CC) $(CFLAGS) \
-	  -Xclang -disable-llvm-passes -emit-llvm \
-	  -c $< -o $@
+	opt -passes=globaldce $< -o $@
 
 # — Dump readable LLVM IR —
 readable: $(MODULE_SRC)
@@ -86,14 +85,14 @@ $(MODULE_POST_BC): $(MODULE_PRE_BC)
 
 # — Compile optimized bitcode to object —
 $(MODULE_OBJ): $(MODULE_POST_BC)
-	llc -O3 -filetype=obj $< -o $@
+	llc -O3 -relocation-model=pic -filetype=obj $< -o $@
 
 module_obj: $(MODULE_OBJ)
 
 
 # — Clean up artifacts —
 clean:
-	rm -f $(INPUT_DIR)*.o $(INPUT_DIR)mod-post-mc.bc $(INPUT_DIR)*.out $(INPUT_DIR)*.in *.ll
+	rm -f $(INPUT_DIR)*.o $(INPUT_DIR)mod-pre-mc.bc $(INPUT_DIR)mod-post-mc.bc $(INPUT_DIR)*.out $(INPUT_DIR)*.in *.ll
 
 # — Run the built executable —
 run: all

@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import sys
 from datetime import datetime
 
 import psutil
@@ -135,6 +136,7 @@ def main(args):
         raise RuntimeError(f"Core {args.core} is out of range")
 
     logger.info(f"Benchmark core is {next_free_core}")
+
     input_dir = args.input_file
     input_name = input_dir.split("/")[-2]
     os.environ["INPUT_DIR"] = input_dir
@@ -181,7 +183,7 @@ def main(args):
     )
     plot_main.log_results(advisor, args, start, input_name, args.plot_directory)
     plot_main.plot_speedup(advisor, input_name, args.plot_directory)
-    del os.environ["INPUT"]  # NOTE: makes no difference apparently?
+    # del os.environ["INPUT"]  # NOTE: makes no difference apparently?
     logger.info("Succesfully completed Monte Carlo Advising")
 
 

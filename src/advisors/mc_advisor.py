@@ -33,7 +33,7 @@ class State(Generic[D]):
 
     def __repr__(self) -> str:
         return (
-            f"State(decisions={self.decisions}, "
+            f"State(decisions={str(self.decisions) if len(str(self.decisions)) <= 50  else str(self.decisions)[:97]+'...' }, "
             f"score={self.score:.7f},"
             f"visits={self.visits})" + (f"*" if self.subtree_is_fully_explored else "")
         )
