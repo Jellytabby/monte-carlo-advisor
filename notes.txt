@@ -11,6 +11,7 @@ Next steps:
     [ ] polybench
     - xsbench
     - lulesh
+    - rodinia
 - how many loops/function/how big program affects time to explore tree
     - program size vs tree size 
 - add autotune attributes

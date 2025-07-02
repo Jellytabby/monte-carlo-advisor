@@ -33,7 +33,7 @@ class State(Generic[D]):
 
     def __repr__(self) -> str:
         return (
-            f"State(decisions={self.decisions}, "
+            f"State(decisions={str(self.decisions) if len(str(self.decisions)) <= 50  else str(self.decisions)[:97]+'...' }, "
             f"score={self.score:.7f},"
             f"visits={self.visits})" + (f"*" if self.subtree_is_fully_explored else "")
         )
@@ -111,6 +111,8 @@ class MonteCarloAdvisor(ABC, Generic[D]):
     def __init__(
         self,
         input_name: str,
+        path: str,
+        timeout: Optional[float],
         C: float = sqrt(2),
     ) -> None:
         self.runner: CompilerCommunicator
@@ -124,6 +126,8 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.invalid_paths: set = set()
         self.max_speedup_after_n_iterations: list[float] = []
         self.filename = input_name
+        self.path: str = path
+        self.timeout: Optional[float] = timeout
 
     def __repr__(self):
         return self.root.repr_subtree()
@@ -161,7 +165,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         "Wrapper method in case the compiler expects a different data structure than we are storing in our State"
         return advice
 
-    def get_initial_tree(self, path: str):
+    def get_initial_tree(self):
         def build_initial_path(
             advisor_type: str, tv: list[log_reader.TensorValue] = [], heuristic=None
         ) -> Any:
@@ -179,7 +183,7 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         self.root.visits = 1
 
         self.runner.compile_once(
-            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
+            self.opt_args(),
             build_initial_path,
         )
         assert self.current
@@ -208,11 +212,11 @@ class MonteCarloAdvisor(ABC, Generic[D]):
         assert parent and state.visits > 0
         return state.score + self.C * sqrt(log(parent.visits) / state.visits)
 
-    def get_score(self, path: str, timeout: Optional[float], scoring_function):
+    def get_score(self, scoring_function):
         self.runner.compile_once(
-            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
+            self.opt_args(),
             self.advice,
-            timeout=timeout,
+            timeout=self.timeout,
         )
         return scoring_function()
 
@@ -256,10 +260,52 @@ class MonteCarloAdvisor(ABC, Generic[D]):
             self.max_speedup_after_n_iterations[-1]
         )
 
-    def run_monte_carlo(
-        self, nr_of_turns: int, path: str, timeout: Optional[float], scoring_function
-    ):
-        self.get_initial_tree(path)
+    def one_iteration(self, scoring_function, old_max: float):
+        try:
+            self.current = self.root
+            self.current_path = []
+            self.in_rollout = False
+            score = self.get_score(scoring_function)
+            while self.current:
+                self.update_score(score)
+                self.current = self.current.parent
+            self.all_runs.append((self.current_path[:], score))
+            max_score = max(old_max, score)
+            self.max_speedup_after_n_iterations.append(max_score)
+            return max_score
+        except (
+            utils.MonteCarloError
+        ):  # should happen if we have an invalid loop unroll while not in rollout
+            assert self.current
+            self.mark_state_as_invalid(self.current, utils.LOOP_UNROLL_ERROR_CODE)
+            return old_max
+        except (
+            subprocess.TimeoutExpired,
+            TimeoutError,
+        ):  # should happen if opt/llc times out
+            assert self.current
+            self.invalid_paths.add(tuple(self.current_path[:]))
+            if self.current.decisions == self.current_path:
+                self.mark_state_as_invalid(
+                    self.current, utils.TIMEOUT_ERROR_CODE
+                )  # we timed out in a tree node
+            else:
+                self.all_runs.append((self.current_path[:], utils.TIMEOUT_ERROR_CODE))
+                self.max_speedup_after_n_iterations.append(
+                    self.max_speedup_after_n_iterations[-1]
+                )
+                self.current.visits += 1
+            logger.warning(
+                f"State: {self.current} with decisions {self.current_path} timed out."
+            )
+            # TODO: find some way to penalize llc/opt that takes too long, so that we avoid exploring that path again
+            return old_max
+        except BaseException as e:
+            print(f"Encountered an unhandled exception: {e}")
+            raise e
+
+    def run_monte_carlo(self, nr_of_turns: int, scoring_function):
+        self.get_initial_tree()
         logger.info(self)
         max_score = 1.0
         for i in range(nr_of_turns):
@@ -268,49 +314,10 @@ class MonteCarloAdvisor(ABC, Generic[D]):
                 logger.info("Explored the entire tree!")
                 break
             try:
-                self.current = self.root
-                self.current_path = []
-                self.in_rollout = False
-                score = self.get_score(path, timeout, scoring_function)
-                while self.current:
-                    self.update_score(score)
-                    self.current = self.current.parent
-                self.all_runs.append((self.current_path[:], score))
-                max_score = max(max_score, score)
-                self.max_speedup_after_n_iterations.append(max_score)
-            except (
-                utils.MonteCarloError
-            ):  # should happen if we have an invalid loop unroll while not in rollout
-                assert self.current
-                self.mark_state_as_invalid(self.current, utils.LOOP_UNROLL_ERROR_CODE)
-            except (
-                subprocess.TimeoutExpired,
-                TimeoutError,
-            ):  # should happen if opt/llc times out
-                assert self.current
-                self.invalid_paths.add(tuple(self.current_path[:]))
-                if self.current.decisions == self.current_path:
-                    self.mark_state_as_invalid(
-                        self.current, utils.TIMEOUT_ERROR_CODE
-                    )  # we timed out in a tree node
-                else:
-                    self.all_runs.append(
-                        (self.current_path[:], utils.TIMEOUT_ERROR_CODE)
-                    )
-                    self.max_speedup_after_n_iterations.append(
-                        self.max_speedup_after_n_iterations[-1]
-                    )
-                    self.current.visits += 1
-                logger.warning(
-                    f"State: {self.current} with decisions {self.current_path} timed out."
-                )
-                # TODO: find some way to penalize llc/opt that takes too long, so that we avoid exploring that path again
+                max_score = self.one_iteration(scoring_function, max_score)
             except KeyboardInterrupt as k:
                 logger.error(f"Received keyboard interrupt {k}")
                 break
-            except BaseException as e:
-                print(f"Encountered an unhandled exception: {e}")
-                raise e
             # logger.debug(self)
         logger.info(self)
         logger.info(f"Highest scoring decisions: {self.get_max_run()}")

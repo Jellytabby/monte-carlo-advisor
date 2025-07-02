@@ -1,22 +1,8 @@
-"""Utility for testing InteractiveModelRunner.
-
-Use it from pass-specific tests by providing a main .py which calls this library's
-`run_interactive` with an appropriate callback to provide advice.
-
-From .ll tests, just call the above-mentioned main as a prefix to the opt/llc
-invocation (with the appropriate flags enabling the interactive mode)
-
-Examples:
-test/Transforms/Inline/ML/interactive-mode.ll
-test/CodeGen/MLRegAlloc/interactive-mode.ll
-"""
-
 import io
 import json
 import logging
 import os
 import subprocess
-import threading
 import time
 from threading import Event
 from time import sleep
@@ -30,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @final
-class InlineCompilerCommunicator(CompilerCommunicator):
+class RegAllocEvictionCompilerCommunicator(CompilerCommunicator):
     def __init__(self, input_name: str, debug, event=None):
         super().__init__(input_name, debug)
         self.event: Event | None = event
@@ -44,7 +30,6 @@ class InlineCompilerCommunicator(CompilerCommunicator):
         on_action: Optional[Callable[[bool], Any]] = None,
         timeout: Optional[float] = None,
     ):
-
         logger.debug(f"Opening pipes {self.to_compiler} and {self.from_compiler}")
 
         os.mkfifo(self.to_compiler, 0o666)
@@ -114,11 +99,11 @@ class InlineCompilerCommunicator(CompilerCommunicator):
                     if not next_event:
                         break
                     event = json.loads(next_event)
-                    if "observation" not in event and "context" not in event:
-                        assert event == header
+                    if "observation" not in event:
+                        # assert event == header
                         sleep(0)
                         continue
-
+                    #
                     while len(fc.peek(1)) <= 0:
                         if not no_stop_event():
                             return
@@ -144,7 +129,7 @@ class InlineCompilerCommunicator(CompilerCommunicator):
                     tensor_values: list[log_reader.TensorValue] = []
                     for fv in features:
                         # logger.debug(fv.to_numpy())
-                        # logger.debug(log_reader.string_tensor_value(fv))
+                        logger.debug(log_reader.string_tensor_value(fv))
                         tensor_values.append(fv)
                     if on_features is not None:
                         on_features(tensor_values)
