@@ -29,6 +29,12 @@ class CompilerCommunicator(ABC):
         timeout: Optional[float] = None,
     ): ...
 
+    def set_nonblocking(self, pipe):
+        os.set_blocking(pipe.fileno(), False)
+
+    def set_blocking(self, pipe):
+        os.set_blocking(pipe.fileno(), True)
+
     def clean_up_pipes(self):
         logger.debug(f"Cleaning up pipes for {type(self).__name__} ")
         try:
@@ -50,6 +56,7 @@ class CompilerCommunicator(ABC):
         timeout: Optional[float] = None,
     ):
 
+        self.clean_up_pipes()
         with tempfile.TemporaryFile("b+x") as error_buffer:
             compiler_proc = None
             try:

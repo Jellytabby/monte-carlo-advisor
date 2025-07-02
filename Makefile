@@ -75,6 +75,8 @@ readable: $(MODULE_SRC)
 	  -Xclang -disable-llvm-passes -emit-llvm -S \
 	  $< -o readable.ll
 
+mod-post-mc.bc: $(MODULE_POST_BC)
+
 # — Run optimization passes on bitcode —
 $(MODULE_POST_BC): $(MODULE_PRE_BC)
 	opt -O3 $< -o $@

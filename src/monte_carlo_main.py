@@ -1,16 +1,17 @@
 import argparse
 import logging
 import os
+import sys
 from datetime import datetime
-
-import psutil
-from matplotlib.pyplot import plot
 
 import plot_main
 import utils
 from advisors.inline import inline_mc_advisor
 from advisors.loop_unroll import loop_unroll_mc_advisor
 from advisors.merged.merged_mc_advisor import MergedMonteCarloAdvisor
+from advisors.reg_alloc.reg_alloc_eviction_advisor import (
+    RegAllocEvictionMonteCarloAdvisor,
+)
 
 logger = logging.getLogger(__name__)
 datefmt = "%Y-%m-%d %H:%M:%S"
@@ -51,6 +52,13 @@ def parse_args_and_run():
         default=False,
         action="store_true",
         help="Enable the Loop Unroll Monte Carlo Advisor",
+    )
+    advisor_selection.add_argument(
+        "-raa",
+        "--reg-alloc-advisor",
+        default=False,
+        action="store_true",
+        help="Enable the Register Allocation Monte Carlo Advisor",
     )
     parser.add_argument(
         "-r",
@@ -139,23 +147,8 @@ def main(args):
     input_file = args.input_file
     input_dir = os.path.dirname(input_file)
     input_name = os.path.basename(input_file)
+    path = input_dir + "/"
     os.environ["INPUT"] = input_file
-
-    match (args.inline_advisor, args.loop_unroll_advisor):
-        case (True, True):
-            advisor = MergedMonteCarloAdvisor(
-                input_name, unroll_model_path=args.loop_unroll_advisor_model
-            )
-        case (True, False):
-            advisor = inline_mc_advisor.InlineMonteCarloAdvisor(input_name)
-        case (False, True):
-            advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(
-                input_name, model_path=args.loop_unroll_advisor_model
-            )
-        case _:
-            raise Exception(
-                "You need to specify at least one advisor. See '--help' for more information."
-            )
 
     start = datetime.now().strftime("%Y%m%d_%H%M%S")
     make_clean()
@@ -166,24 +159,58 @@ def main(args):
         args.warmup_runs, args.initial_samples, args.max_samples, next_free_core
     )
     logger.info("Completed baseline benchmarking")
-
     logger.info("Starting Monte Carlo Tree runs")
-    advisor.run_monte_carlo(
-        args.number_of_runs,
-        input_dir + "/",
-        args.timeout,
-        lambda: get_score(
-            baseline,
-            args.warmup_runs,
-            args.initial_samples,
-            args.max_samples,
-            args.timeout,
-            next_free_core,
-        ),
-    )
+
+    if not args.reg_alloc_advisor:
+        match (args.inline_advisor, args.loop_unroll_advisor):
+            case (True, True):
+                advisor = MergedMonteCarloAdvisor(
+                    input_name, unroll_model_path=args.loop_unroll_advisor_model
+                )
+            case (True, False):
+                advisor = inline_mc_advisor.InlineMonteCarloAdvisor(input_name)
+            case (False, True):
+                advisor = loop_unroll_mc_advisor.LoopUnrollMonteCarloAdvisor(
+                    input_name,
+                    path,
+                    args.timeout,
+                    model_path=args.loop_unroll_advisor_model,
+                )
+            case _:
+                raise Exception(
+                    "You need to specify at least one advisor. See '--help' for more information."
+                )
+
+        advisor.run_monte_carlo(
+            args.number_of_runs,
+            lambda: get_score(
+                baseline,
+                args.warmup_runs,
+                args.initial_samples,
+                args.max_samples,
+                args.timeout,
+                next_free_core,
+            ),
+        )
+    else:
+        get_input_module()
+        get_optimized_module()
+        advisor = RegAllocEvictionMonteCarloAdvisor(input_name, path, args.timeout)
+        advisor.run_monte_carlo(
+            args.number_of_runs,
+            lambda: get_reg_alloc_score(
+                baseline,
+                args.warmup_runs,
+                args.initial_samples,
+                args.max_samples,
+                args.timeout,
+                next_free_core,
+            ),
+        )
+
     plot_main.log_results(advisor, args, start, input_name, args.plot_directory)
     plot_main.plot_speedup(advisor, input_name, args.plot_directory)
-    del os.environ["INPUT"]  # NOTE: makes no difference apparently?
+    # del os.environ["INPUT"]  # NOTE: makes no difference apparently?
     logger.info("Succesfully completed Monte Carlo Advising")
 
 
@@ -194,6 +221,11 @@ def make_clean():
 
 def get_input_module():
     cmd = ["make", "mod-pre-mc.bc"]
+    utils.get_cmd_output(cmd)
+
+
+def get_optimized_module():
+    cmd = ["make", "mod-post-mc.bc"]
     utils.get_cmd_output(cmd)
 
 
@@ -235,8 +267,26 @@ def get_score(
         initial_samples=initial_samples,
         max_samples=max_samples,
     )
-    return baseline.mean / runtimes.mean
+    return baseline.median / runtimes.median
     # return utils.get_speedup_factor(baseline, runtimes)
+
+
+def get_reg_alloc_score(
+    baseline: utils.AdaptiveBenchmarkingResult,
+    warmup_runs: int,
+    initial_samples: int,
+    max_samples: int,
+    timeout: float | None,
+    core: int,
+):
+    cmd = ["make", "run"]
+    runtimes = utils.adaptive_benchmark(
+        runtime_generator(cmd, core),
+        warmup_runs=warmup_runs,
+        initial_samples=initial_samples,
+        max_samples=max_samples,
+    )
+    return baseline.median / runtimes.median
 
 
 if __name__ == "__main__":

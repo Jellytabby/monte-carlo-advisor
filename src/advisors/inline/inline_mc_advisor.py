@@ -30,7 +30,7 @@ class InlineMonteCarloAdvisor(MonteCarloAdvisor[bool]):
             "-debug-only=inline,inline-ml",
             "-enable-ml-inliner=release",
             f"-inliner-interactive-channel-base={self.filename}",
-        ]
+        ] + ["-o", self.path + "mod-post-mc.bc", self.path + "mod-pre-mc.bc"]
 
     def get_rollout_decision(self, tv=None) -> bool:
         choice = random.random()

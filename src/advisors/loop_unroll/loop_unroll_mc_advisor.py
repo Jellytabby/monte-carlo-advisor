@@ -18,15 +18,20 @@ logger = logging.getLogger(__name__)
 @final
 class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
     def __init__(
-        self, input_name: str, model_path: Optional[str] = None, C: float = sqrt(2)
+        self,
+        input_name: str,
+        path: str,
+        timeout: Optional[float],
+        model_path: Optional[str] = None,
+        C: float = sqrt(2),
     ) -> None:
-        super().__init__(input_name, C)
+        super().__init__(input_name, path, timeout, C)
         self.runner: loop_unroll_runner.LoopUnrollCompilerCommunicator = (
             loop_unroll_runner.LoopUnrollCompilerCommunicator(input_name, True)
         )
         self.filename = self.runner.channel_base
 
-        self.MAX_UNROLL_FACTOR = 32
+        self.MAX_UNROLL_FACTOR = 10
 
         if model_path is not None:
             self.interpreter = Interpreter(model_path=model_path)
@@ -45,7 +50,7 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             "--mlgo-loop-unroll-advisor-mode=development",
             "--interactive-model-runner-echo-reply",
             "-debug-only=loop-unroll-development-advisor,loop-unroll",
-        ]
+        ] + ["-o", self.path + "mod-post-mc.bc", self.path + "mod-pre-mc.bc"]
 
     def make_response_for_factor(self, factor: int):
         assert factor >= -1
@@ -143,11 +148,11 @@ class LoopUnrollMonteCarloAdvisor(MonteCarloAdvisor[int]):
             raise MonteCarloError("unsuccessful unrolling")
 
     @override
-    def get_score(self, path: str, timeout: Optional[float], scoring_function):
+    def get_score(self, scoring_function):
         self.runner.compile_once(
-            self.opt_args() + ["-o", path + "mod-post-mc.bc", path + "mod-pre-mc.bc"],
+            self.opt_args(),
             self.advice,
             on_action=self.check_unroll_success,
-            timeout=timeout,
+            timeout=self.timeout,
         )
         return scoring_function()
