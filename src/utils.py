@@ -1,3 +1,4 @@
+import argparse
 import io
 import logging
 import math
@@ -30,6 +31,13 @@ class UnknownAdvisorError(Exception):
         super().__init__(
             f"Unknown advisor type. Currently supported are {INLINE} and {LOOP_UNROLL}"
         )
+
+
+def comma_separated_numbers(value):
+    try:
+        return [int(x) for x in value.split(",")]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid number in list: '{value}'")
 
 
 def basename(file: str) -> str:

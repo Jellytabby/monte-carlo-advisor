@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 from datetime import datetime
+from typing import Set
 
 import psutil
 from matplotlib.pyplot import plot
@@ -15,10 +16,6 @@ from advisors.merged.merged_mc_advisor import MergedMonteCarloAdvisor
 logger = logging.getLogger(__name__)
 datefmt = "%Y-%m-%d %H:%M:%S"
 fmt = "%(asctime)s.%(msecs)03d|%(levelname)s|%(name)s|%(funcName)s(): %(message)s"
-
-
-def list_of_args(args: str) -> list[str]:
-    return args.split(",")
 
 
 def parse_args_and_run():
@@ -77,14 +74,15 @@ def parse_args_and_run():
         "-m",
         "--max-samples",
         default=100,
+        type=int,
         help="Maximum number of runtime samples to take until convergence.",
     )
     parser.add_argument(
         "-c",
         "--core",
-        type=int,
+        type=utils.comma_separated_numbers,
         required=True,
-        help="Core on which to execute the benchmark runs on.",
+        help="Physical cores on which to execute the benchmark runs on.",
     )
     parser.add_argument(
         "-t",
@@ -127,14 +125,16 @@ def main(args):
     #     utils.get_next_free_physical_core(MANAGER_PHYSICAL_CORES)
     # ][0]
 
-    if args.core < MANAGER_PHYSICAL_CORES:
+    if len([c for c in args.core if c < MANAGER_PHYSICAL_CORES]) > 0:
         raise RuntimeError(f"Core {args.core} is reserved for the manager process")
-    try:
-        next_free_core = physical_to_logical[args.core][0]
-    except:
-        raise RuntimeError(f"Core {args.core} is out of range")
+    # try:
+    #     next_free_core = physical_to_logical[args.core][0]
+    # except:
+    #     raise RuntimeError(f"Core {args.core} is out of range")
 
-    logger.info(f"Benchmark core is {next_free_core}")
+    benchmark_cores = sum([physical_to_logical[i] for i in args.core], [])
+
+    logger.info(f"Benchmark core is {benchmark_cores}")
     logger.info(f"Script started with arguments: {args}")
     input_file = args.input_file
     input_dir = os.path.dirname(input_file)
@@ -144,7 +144,8 @@ def main(args):
     match (args.inline_advisor, args.loop_unroll_advisor):
         case (True, True):
             advisor = MergedMonteCarloAdvisor(
-                input_name, unroll_model_path=args.loop_unroll_advisor_model
+                input_name,
+                unroll_model_path=args.loop_unroll_advisor_model,
             )
         case (True, False):
             advisor = inline_mc_advisor.InlineMonteCarloAdvisor(input_name)
@@ -163,7 +164,7 @@ def main(args):
 
     logger.info("Starting baseline benchmarking")
     baseline = get_baseline_runtime(
-        args.warmup_runs, args.initial_samples, args.max_samples, next_free_core
+        args.warmup_runs, args.initial_samples, args.max_samples, set(benchmark_cores)
     )
     logger.info("Completed baseline benchmarking")
 
@@ -178,7 +179,7 @@ def main(args):
             args.initial_samples,
             args.max_samples,
             args.timeout,
-            next_free_core,
+            set(benchmark_cores),
         ),
     )
     plot_main.log_results(advisor, args, start, input_name, args.plot_directory)
@@ -198,22 +199,22 @@ def get_input_module():
 
 
 def get_baseline_runtime(
-    warmup_runs: int, initial_samples: int, max_samples: int, core: int
+    warmup_runs: int, initial_samples: int, max_samples: int, cores: set[int]
 ):
     cmd = ["make", "run_baseline"]
     return utils.adaptive_benchmark(
-        runtime_generator(cmd, core),
+        runtime_generator(cmd, cores),
         warmup_runs=warmup_runs,
         initial_samples=initial_samples,
         max_samples=max_samples,
     )
 
 
-def runtime_generator(cmd: list[str], core: int):
+def runtime_generator(cmd: list[str], cores: set[int]):
     logger.debug(cmd)
     while True:
         outs = utils.get_cmd_output(
-            cmd, pre_exec_function=lambda: os.sched_setaffinity(0, {core})
+            cmd, pre_exec_function=lambda: os.sched_setaffinity(0, cores)
         )
         yield utils.readout_mc_inline_timer(outs.decode())
 
@@ -224,13 +225,13 @@ def get_score(
     initial_samples: int,
     max_samples: int,
     timeout: float,
-    core: int,
+    cores: set[int],
 ):
     cmd = ["make", "module_obj"]
     utils.get_cmd_output(cmd, timeout=timeout)
     cmd = ["make", "run"]
     runtimes = utils.adaptive_benchmark(
-        runtime_generator(cmd, core),
+        runtime_generator(cmd, cores),
         warmup_runs=warmup_runs,
         initial_samples=initial_samples,
         max_samples=max_samples,
