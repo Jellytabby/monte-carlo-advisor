@@ -1,6 +1,7 @@
-import numpy as np
 import dataclasses
 from typing import List
+
+import numpy as np
 
 # These need to be in a separate file (not __main__) to enable (un)pickling
 
@@ -14,12 +15,14 @@ class UnrollDecisionTrainingSample:
 @dataclasses.dataclass(frozen=True)
 class AdaptiveBenchmarkingResult:
     runtimes: np.ndarray
-    mean: float
+    median: float
     ci: float
     converged: bool
 
     def is_zero_rt(self):
-        return len(self.runtimes) == 2 and self.runtimes[0] == 0 and self.runtimes[1] == 0
+        return (
+            len(self.runtimes) == 2 and self.runtimes[0] == 0 and self.runtimes[1] == 0
+        )
 
     def is_invalid(self):
         return len(self.runtimes) == 0

@@ -318,6 +318,22 @@ def adaptive_benchmark(
         return AdaptiveBenchmarkingResult(samples, median, relative_ci_width, False)
 
 
+def get_fixed_run_benchmark(
+    iterator,
+    warmup_runs,
+    initial_samples,
+) -> list[float]:
+    logger.debug("Starting warmup runs")
+    for i in range(warmup_runs):
+        next(iterator)
+    samples = []
+    for i in range(initial_samples):
+        sample = next(iterator)
+        logger.debug(f"Sample {i}: {sample}")
+        samples.append(sample)
+    return samples
+
+
 def get_speedup_factor(base: np.ndarray, opt: np.ndarray):
     # This will get element wise speedup factors for all inputs where both succeeded
     base = base[: len(opt)]

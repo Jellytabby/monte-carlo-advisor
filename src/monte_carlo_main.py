@@ -159,12 +159,17 @@ def main(args):
             )
 
     start = datetime.now().strftime("%Y%m%d_%H%M%S")
+    plotter = plot_main.Plotter(input_name, args.plot_directory, advisor, start)
     make_clean()
     get_input_module()
 
     logger.info("Starting baseline benchmarking")
     baseline = get_baseline_runtime(
-        args.warmup_runs, args.initial_samples, args.max_samples, set(benchmark_cores)
+        args.warmup_runs,
+        args.initial_samples,
+        args.max_samples,
+        set(benchmark_cores),
+        plotter,
     )
     logger.info("Completed baseline benchmarking")
 
@@ -173,17 +178,18 @@ def main(args):
         args.number_of_runs,
         input_dir + "/",
         args.timeout,
-        lambda: get_score(
+        lambda: get_min_score(
             baseline,
             args.warmup_runs,
             args.initial_samples,
-            args.max_samples,
+            # args.max_samples,
             args.timeout,
             set(benchmark_cores),
+            plotter,
         ),
     )
-    plot_main.log_results(advisor, args, start, input_name, args.plot_directory)
-    plot_main.plot_speedup(advisor, input_name, args.plot_directory)
+    plotter.log_results(args)
+    plotter.plot_speedup()
     del os.environ["INPUT"]  # NOTE: makes no difference apparently?
     logger.info("Succesfully completed Monte Carlo Advising")
 
@@ -198,18 +204,6 @@ def get_input_module():
     utils.get_cmd_output(cmd)
 
 
-def get_baseline_runtime(
-    warmup_runs: int, initial_samples: int, max_samples: int, cores: set[int]
-):
-    cmd = ["make", "run_baseline"]
-    return utils.adaptive_benchmark(
-        runtime_generator(cmd, cores),
-        warmup_runs=warmup_runs,
-        initial_samples=initial_samples,
-        max_samples=max_samples,
-    )
-
-
 def runtime_generator(cmd: list[str], cores: set[int]):
     logger.debug(cmd)
     while True:
@@ -219,7 +213,28 @@ def runtime_generator(cmd: list[str], cores: set[int]):
         yield utils.readout_mc_inline_timer(outs.decode())
 
 
-def get_score(
+def get_baseline_runtime(
+    warmup_runs: int,
+    initial_samples: int,
+    max_samples: int,
+    cores: set[int],
+    plotter: plot_main.Plotter,
+):
+    cmd = ["make", "run_baseline"]
+    # return utils.adaptive_benchmark(
+    #     runtime_generator(cmd, cores),
+    #     warmup_runs=warmup_runs,
+    #     initial_samples=initial_samples,
+    #     max_samples=max_samples,
+    # )
+    baseline_runtimes = utils.get_fixed_run_benchmark(
+        runtime_generator(cmd, cores), warmup_runs, initial_samples
+    )
+    plotter.runtime_histogram(baseline_runtimes)
+    return baseline_runtimes
+
+
+def get_median_score(
     baseline: utils.AdaptiveBenchmarkingResult,
     warmup_runs: int,
     initial_samples: int,
@@ -236,8 +251,29 @@ def get_score(
         initial_samples=initial_samples,
         max_samples=max_samples,
     )
-    return baseline.mean / runtimes.mean
+    return baseline.median / runtimes.median
     # return utils.get_speedup_factor(baseline, runtimes)
+
+
+def get_min_score(
+    baseline: list[float],
+    warmup_runs: int,
+    initial_samples: int,
+    timeout: float,
+    cores: set[int],
+    plotter: plot_main.Plotter,
+) -> float:
+    cmd = ["make", "module_obj"]
+    utils.get_cmd_output(cmd, timeout=timeout)
+    cmd = ["make", "run"]
+    runtimes = utils.get_fixed_run_benchmark(
+        runtime_generator(cmd, cores),
+        warmup_runs=warmup_runs,
+        initial_samples=initial_samples,
+    )
+    assert len(baseline) == len(runtimes)
+    plotter.runtime_histogram(runtimes)
+    return min(baseline) / min(runtimes)
 
 
 if __name__ == "__main__":
