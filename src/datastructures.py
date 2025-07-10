@@ -34,7 +34,7 @@ def get_invalid_abr():
 
 def get_zero_rt_abr():
     return AdaptiveBenchmarkingResult(
-        np.array([float(0), float(0)], dtype=float), float(0), float(0), True
+        np.array([float(0)], dtype=float), float(0), float(0), True
     )
 
 

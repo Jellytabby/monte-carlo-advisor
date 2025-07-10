@@ -322,7 +322,7 @@ def get_fixed_run_benchmark(
     iterator,
     warmup_runs,
     initial_samples,
-) -> list[float]:
+) -> list[int]:
     logger.debug("Starting warmup runs")
     for i in range(warmup_runs):
         next(iterator)

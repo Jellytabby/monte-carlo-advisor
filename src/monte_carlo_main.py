@@ -12,6 +12,7 @@ import utils
 from advisors.inline import inline_mc_advisor
 from advisors.loop_unroll import loop_unroll_mc_advisor
 from advisors.merged.merged_mc_advisor import MergedMonteCarloAdvisor
+from datastructures import AdaptiveBenchmarkingResult
 
 logger = logging.getLogger(__name__)
 datefmt = "%Y-%m-%d %H:%M:%S"
@@ -55,6 +56,12 @@ def parse_args_and_run():
         type=int,
         default=50,
         help="Number of iterations to run the Monte Carlo Simulation",
+    )
+    parser.add_argument(
+        "--min-run",
+        default=False,
+        action="store_true",
+        help="Use the minimum runtime instead of the adaptive median",
     )
     parser.add_argument(
         "-w",
@@ -159,7 +166,7 @@ def main(args):
             )
 
     start = datetime.now().strftime("%Y%m%d_%H%M%S")
-    plotter = plot_main.Plotter(input_name, args.plot_directory, advisor, start)
+    plotter = plot_main.Plotter(input_name, args, advisor, start)
     make_clean()
     get_input_module()
 
@@ -169,26 +176,38 @@ def main(args):
         args.initial_samples,
         args.max_samples,
         set(benchmark_cores),
+        args.min_run,
         plotter,
     )
     logger.info("Completed baseline benchmarking")
 
     logger.info("Starting Monte Carlo Tree runs")
-    advisor.run_monte_carlo(
-        args.number_of_runs,
-        input_dir + "/",
-        args.timeout,
-        lambda: get_min_score(
+    if args.min_run:
+        assert baseline is list[float]
+        scoring_function = lambda: get_min_score(
             baseline,
             args.warmup_runs,
             args.initial_samples,
-            # args.max_samples,
             args.timeout,
             set(benchmark_cores),
             plotter,
-        ),
+        )
+    else:
+        assert baseline is AdaptiveBenchmarkingResult
+        scoring_function = lambda: get_median_score(
+            baseline,
+            args.warmup_runs,
+            args.initial_samples,
+            args.max_samples,
+            args.timeout,
+            set(benchmark_cores),
+            plotter,
+        )
+
+    advisor.run_monte_carlo(
+        args.number_of_runs, input_dir + "/", args.timeout, scoring_function
     )
-    plotter.log_results(args)
+    plotter.log_results()
     plotter.plot_speedup()
     del os.environ["INPUT"]  # NOTE: makes no difference apparently?
     logger.info("Succesfully completed Monte Carlo Advising")
@@ -218,19 +237,24 @@ def get_baseline_runtime(
     initial_samples: int,
     max_samples: int,
     cores: set[int],
+    use_min_run: bool,
     plotter: plot_main.Plotter,
-):
+) -> AdaptiveBenchmarkingResult | list[int]:
+
     cmd = ["make", "run_baseline"]
-    # return utils.adaptive_benchmark(
-    #     runtime_generator(cmd, cores),
-    #     warmup_runs=warmup_runs,
-    #     initial_samples=initial_samples,
-    #     max_samples=max_samples,
-    # )
-    baseline_runtimes = utils.get_fixed_run_benchmark(
-        runtime_generator(cmd, cores), warmup_runs, initial_samples
-    )
-    plotter.runtime_histogram(baseline_runtimes)
+    if use_min_run:
+        baseline_runtimes = utils.get_fixed_run_benchmark(
+            runtime_generator(cmd, cores), warmup_runs, initial_samples
+        )
+        plotter.runtime_histogram(baseline_runtimes)
+    else:
+        baseline_runtimes = utils.adaptive_benchmark(
+            runtime_generator(cmd, cores),
+            warmup_runs=warmup_runs,
+            initial_samples=initial_samples,
+            max_samples=max_samples,
+        )
+        plotter.runtime_histogram(list(baseline_runtimes.runtimes))
     return baseline_runtimes
 
 
@@ -241,6 +265,7 @@ def get_median_score(
     max_samples: int,
     timeout: float,
     cores: set[int],
+    plotter: plot_main.Plotter,
 ):
     cmd = ["make", "module_obj"]
     utils.get_cmd_output(cmd, timeout=timeout)
@@ -251,12 +276,13 @@ def get_median_score(
         initial_samples=initial_samples,
         max_samples=max_samples,
     )
+    plotter.runtime_histogram(list(runtimes.runtimes))
     return baseline.median / runtimes.median
     # return utils.get_speedup_factor(baseline, runtimes)
 
 
 def get_min_score(
-    baseline: list[float],
+    baseline: list[int],
     warmup_runs: int,
     initial_samples: int,
     timeout: float,
@@ -266,6 +292,7 @@ def get_min_score(
     cmd = ["make", "module_obj"]
     utils.get_cmd_output(cmd, timeout=timeout)
     cmd = ["make", "run"]
+
     runtimes = utils.get_fixed_run_benchmark(
         runtime_generator(cmd, cores),
         warmup_runs=warmup_runs,
