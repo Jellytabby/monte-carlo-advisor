@@ -25,9 +25,13 @@ MODULE_POST_BC := $(DIR)mod-post-mc.bc
 MODULE_OBJ    := $(DIR)mod-post-mc.o
 
 # — Project-specific flags (comment out entire line to disable) —
-INC          := -I/scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/
-EXTRA_OBJS   := /scr/sophia.herrmann/src/PolyBenchC-4.2.1/utilities/polybench.o
-EXTRA_FLAGS  := -DPOLYBENCH_USE_C99_PROTO -lm
+INC          := 
+EXTRA_OBJS   := 
+EXTRA_FLAGS  := -lm -fopenmp -fPIE 
+
+ifeq ($(notdir $(INPUT)),euler3d_cpu)
+    EXTRA_FLAGS += -fopenmp=libgomp
+endif
 
 # — Compiler flags —
 CFLAGS       := -O3 $(INC) $(EXTRA_FLAGS)
@@ -40,7 +44,7 @@ CFLAGS       := -O3 $(INC) $(EXTRA_FLAGS)
 .PHONY: all clean run run_baseline readable
 
 # — Default target —
-all: $(OUT) $(MODULE_POST_BC)
+all: run_baseline run
 
 # — Link final executable —
 $(OUT): $(MAIN_OBJ) $(PROF_OBJ) $(MODULE_OBJ) $(EXTRA_OBJS)
@@ -51,7 +55,7 @@ $(DIR)baseline.out: $(MAIN_SRC) $(MODULE_SRC) $(PROF_SRC) $(EXTRA_OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 run_baseline: $(DIR)baseline.out
-	$(DIR)baseline.out
+	cd $(DIR) && ./baseline
 
 # — Compile main source —
 $(MAIN_OBJ): $(MAIN_SRC)
@@ -81,7 +85,7 @@ $(MODULE_POST_BC): $(MODULE_PRE_BC)
 
 # — Compile optimized bitcode to object —
 $(MODULE_OBJ): $(MODULE_POST_BC)
-	llc -O3 -filetype=obj $< -o $@
+	llc -O3 -relocation-model=pic -filetype=obj $< -o $@
 
 module_obj: $(MODULE_OBJ)
 
@@ -91,6 +95,8 @@ clean:
 	rm -f $(DIR)*.o $(DIR)*.bc $(DIR)*.out $(DIR)*.in *.ll
 
 # — Run the built executable —
-run: all
-	$(OUT)
+run: $(OUT)
+	cd $(DIR) && ./run
+
+	
 
